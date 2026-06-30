@@ -339,11 +339,54 @@
 
 .statusCard,
 .answerCard,
-.actionCard {
+.actionCard,
+.baselineAnswerCard {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(42, 46, 87, 0.06);
   box-shadow: 0 18px 42px rgba(39, 47, 104, 0.09);
+}
+
+.baselineLoading {
+  width: 82px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 17px;
+  background: #f0efff;
+  border: 1px solid rgba(78, 68, 255, 0.08);
+}
+
+.baselineLoading span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3a2cff;
+  animation: typingPulse 1s ease-in-out infinite;
+}
+
+.baselineLoading span:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.baselineLoading span:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+@keyframes typingPulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.32;
+    transform: translateY(0);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
 }
 
 .statusCard {
@@ -468,6 +511,28 @@
 .answerCard {
   position: relative;
   padding: 18px 18px 15px;
+}
+
+.baselineAnswerCard {
+  padding: 18px 18px 17px;
+}
+
+.baselineAnswerCard strong {
+  display: block;
+  color: #070813;
+  font-size: 17px;
+  line-height: 1.36;
+  font-weight: 820;
+  letter-spacing: -0.04em;
+}
+
+.baselineAnswerCard p {
+  margin: 12px 0 0;
+  color: #181a2a;
+  font-size: 13.5px;
+  line-height: 1.56;
+  font-weight: 500;
+  letter-spacing: -0.025em;
 }
 
 .answerHeader {
