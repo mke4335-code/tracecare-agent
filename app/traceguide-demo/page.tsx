@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import Image from "next/image";
 import styles from "./traceguide-demo.module.css";
 
@@ -28,6 +28,11 @@ type TraceResponse = {
   sourceTags: string[];
   variables: TraceVariables;
   nextAction: string;
+  product: ProductContext;
+  loadingTitle: string;
+  loadingSteps: string[];
+  scenario?: string;
+  usedLLM?: boolean;
 };
 
 type ActionResponse = {
@@ -39,6 +44,41 @@ type SheetMode = "sourceOverview" | "sourcesUsed" | "sourceDetails" | "variables
 
 const defaultQuestion = "The glass lunch box arrived damaged. Can I return it?";
 
+type ProductContext = {
+  name: string;
+  image: "glass-box" | "cookies" | "container-set";
+  detail: string;
+  status: string;
+  linkLabel: string;
+};
+
+const defaultProduct: ProductContext = {
+  name: "Glass Lunch Box",
+  image: "glass-box",
+  detail: "1 item",
+  status: "Delivered 2 days ago",
+  linkLabel: "Order details",
+};
+
+const suggestedQuestions = [
+  {
+    label: "Damaged lunch box",
+    text: "The glass lunch box arrived damaged. Can I return it?",
+  },
+  {
+    label: "Damaged food item",
+    text: "The cookies arrived damaged. Can I get a refund?",
+  },
+  {
+    label: "Delivery compensation",
+    text: "My order arrived two days late. Can I get compensation?",
+  },
+  {
+    label: "Allergen check",
+    text: "I’m allergic to peanuts. Can I eat these milk cookies?",
+  },
+];
+
 const fallbackResponse: TraceResponse = {
   answer:
     "Yes, this item is likely eligible for a return and refund.\n\nYour order is still within the return window according to the return policy [1]. The order status shows it was delivered recently [2]. Please keep the item and packaging if possible.",
@@ -48,9 +88,17 @@ const fallbackResponse: TraceResponse = {
     issueIdentified: "Damaged item",
     request: "Return & Refund",
     reason: "Item arrived damaged",
-    evidence: "Photos provided",
+    evidence: "Photos needed",
   },
   nextAction: "start a refund request",
+  product: defaultProduct,
+  loadingTitle: "Checking refund eligibility...",
+  loadingSteps: [
+    "Understanding your request",
+    "Checking order status",
+    "Reading return policy",
+    "Preparing answer",
+  ],
   sources: [
     {
       id: "return-policy",
@@ -85,18 +133,127 @@ const fallbackResponse: TraceResponse = {
   ],
 };
 
-const loadingSteps = [
+const defaultLoadingSteps = [
   "Understanding your request",
   "Checking order status",
   "Reading return policy",
   "Preparing answer",
 ];
 
+function includesAny(text: string, terms: string[]) {
+  const lower = text.toLowerCase();
+  return terms.some((term) => lower.includes(term.toLowerCase()));
+}
+
+function inferProduct(prompt: string): ProductContext {
+  if (includesAny(prompt, ["cookie", "cookies", "biscuit", "food", "allergen", "peanut", "饼干", "食品", "过敏", "花生"])) {
+    return {
+      name: "Milk Cookies",
+      image: "cookies",
+      detail: "100g / pack",
+      status: includesAny(prompt, ["allergen", "peanut", "过敏", "花生"])
+        ? "Product information available"
+        : "Delivered 2 days ago",
+      linkLabel: "Product details",
+    };
+  }
+
+  if (includesAny(prompt, ["late", "delay", "delayed", "compensation", "missing", "accessory", "延迟", "补偿", "缺少", "配件"])) {
+    return {
+      name: "Glass Food Containers Set",
+      image: "container-set",
+      detail: "4-piece set",
+      status: includesAny(prompt, ["late", "delay", "delayed", "compensation", "延迟", "补偿"])
+        ? "Arrived 2 days late"
+        : "Delivered today",
+      linkLabel: includesAny(prompt, ["late", "delay", "delayed", "compensation", "延迟", "补偿"])
+        ? "Delivery details"
+        : "Order details",
+    };
+  }
+
+  return defaultProduct;
+}
+
+function inferVariables(prompt: string): TraceVariables {
+  if (includesAny(prompt, ["allergen", "peanut", "过敏", "花生"])) {
+    return {
+      issueIdentified: "Allergen concern",
+      request: "Product safety advice",
+      reason: "Customer is allergic to peanuts",
+      evidence: "Ingredient data available",
+    };
+  }
+
+  if (includesAny(prompt, ["late", "delay", "delayed", "compensation", "延迟", "补偿"])) {
+    return {
+      issueIdentified: "Late delivery",
+      request: "Compensation",
+      reason: "Delivered after promised date",
+      evidence: "Order timeline available",
+    };
+  }
+
+  if (includesAny(prompt, ["missing", "accessory", "缺少", "少了", "配件"])) {
+    return {
+      issueIdentified: "Missing accessory",
+      request: "Replacement or refund",
+      reason: "Accessory missing from package",
+      evidence: "Photos needed",
+    };
+  }
+
+  if (includesAny(prompt, ["food", "cookie", "cookies", "biscuit", "饼干", "食品", "吃的"])) {
+    return {
+      issueIdentified: "Damaged food item",
+      request: "Return & Refund",
+      reason: "Food arrived damaged",
+      evidence: "Photos needed",
+    };
+  }
+
+  return fallbackResponse.variables;
+}
+
+function inferLoadingTitle(prompt: string) {
+  if (includesAny(prompt, ["allergen", "peanut", "过敏", "花生"])) return "Checking product safety...";
+  if (includesAny(prompt, ["late", "delay", "delayed", "compensation", "延迟", "补偿"])) return "Checking delivery compensation...";
+  if (includesAny(prompt, ["missing", "accessory", "缺少", "少了", "配件"])) return "Checking support options...";
+  if (includesAny(prompt, ["food", "cookie", "cookies", "biscuit", "饼干", "食品", "吃的"])) return "Checking food return options...";
+  return "Checking refund eligibility...";
+}
+
+function inferLoadingSteps(prompt: string) {
+  if (includesAny(prompt, ["allergen", "peanut", "过敏", "花生"])) {
+    return ["Understanding allergy concern", "Reading ingredients", "Checking safety rule", "Preparing answer"];
+  }
+
+  if (includesAny(prompt, ["late", "delay", "delayed", "compensation", "延迟", "补偿"])) {
+    return ["Understanding your request", "Checking delivery timeline", "Reading compensation policy", "Preparing answer"];
+  }
+
+  if (includesAny(prompt, ["missing", "accessory", "缺少", "少了", "配件"])) {
+    return ["Understanding your issue", "Checking order contents", "Reading support rule", "Preparing answer"];
+  }
+
+  if (includesAny(prompt, ["food", "cookie", "cookies", "biscuit", "饼干", "食品", "吃的"])) {
+    return ["Understanding your issue", "Checking product type", "Reading return policy", "Preparing answer"];
+  }
+
+  return defaultLoadingSteps;
+}
+
+function productImageSrc(product: ProductContext) {
+  if (product.image === "cookies") return "/traceguide-cookie.png";
+  if (product.image === "container-set") return "/traceguide-container-set.png";
+  return "/traceguide-glass-lunch-box.png";
+}
+
 export default function TraceGuideDemo() {
-  const [question, setQuestion] = useState(defaultQuestion);
+  const [question, setQuestion] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [response, setResponse] = useState<TraceResponse | null>(null);
-  const [phase, setPhase] = useState<"loading" | "answer" | "rechecking" | "action">("loading");
+  const [phase, setPhase] = useState<"idle" | "loading" | "answer" | "rechecking" | "action">("idle");
   const [loadingStep, setLoadingStep] = useState(0);
   const [sheetMode, setSheetMode] = useState<SheetMode>(null);
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
@@ -104,18 +261,14 @@ export default function TraceGuideDemo() {
   const [userApproved, setUserApproved] = useState(false);
   const [action, setAction] = useState<ActionResponse | null>(null);
   const [actionStep, setActionStep] = useState(0);
-  const booted = useRef(false);
+  const [previewProduct, setPreviewProduct] = useState<ProductContext>(defaultProduct);
 
   const activeResponse = response || fallbackResponse;
   const primarySource = selectedSource || activeResponse.sources[0];
-
-  useEffect(() => {
-    if (booted.current) return;
-    booted.current = true;
-    void runAssessment(defaultQuestion, fallbackResponse.variables, "loading");
-    // The initial demo assessment intentionally runs only once on first mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const activeProduct = response?.product || previewProduct;
+  const activeLoadingSteps = response?.loadingSteps?.length
+    ? response.loadingSteps
+    : inferLoadingSteps(question);
 
   async function runAssessment(
     prompt: string,
@@ -126,33 +279,36 @@ export default function TraceGuideDemo() {
     setLoadingStep(0);
     setSheetMode(null);
     setSelectedSource(null);
+    setQuestion(prompt);
+    setPreviewProduct(inferProduct(prompt));
+    if (nextPhase === "loading") {
+      setResponse(null);
+      setAction(null);
+      setUserApproved(false);
+    }
 
     const interval = window.setInterval(() => {
-      setLoadingStep((current) => Math.min(current + 1, loadingSteps.length - 1));
+      setLoadingStep((current) => Math.min(current + 1, inferLoadingSteps(prompt).length - 1));
     }, 620);
 
     try {
-      const startedAt = Date.now();
-      const apiResponse = await fetch("/api/traceguide-chat", {
+      const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 1900));
+      const apiRequest = fetch("/api/traceguide-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: prompt,
           variables: nextVariables,
-          product: {
-            name: "Glass Lunch Box",
-            deliveryStatus: "Delivered 2 days ago",
+      product: {
+            name: inferProduct(prompt).name,
+            deliveryStatus: inferProduct(prompt).status,
           },
         }),
       });
+      const [apiResponse] = await Promise.all([apiRequest, minimumDelay]);
 
       const result = await apiResponse.json();
       if (!apiResponse.ok) throw new Error(result.error || "TraceGuide failed.");
-
-      const elapsed = Date.now() - startedAt;
-      if (elapsed < 1900) {
-        await new Promise((resolve) => window.setTimeout(resolve, 1900 - elapsed));
-      }
 
       setResponse(normaliseResponse(result));
       setVariables(normaliseResponse(result).variables);
@@ -162,7 +318,7 @@ export default function TraceGuideDemo() {
       setVariables(fallbackResponse.variables);
     } finally {
       window.clearInterval(interval);
-      setLoadingStep(loadingSteps.length);
+      setLoadingStep(inferLoadingSteps(prompt).length);
       setPhase("answer");
     }
   }
@@ -175,7 +331,17 @@ export default function TraceGuideDemo() {
       sourceTags: result.sourceTags?.length ? result.sourceTags : fallbackResponse.sourceTags,
       variables: result.variables || fallbackResponse.variables,
       nextAction: result.nextAction || "start a refund request",
+      product: result.product || inferProduct(question),
+      loadingTitle: result.loadingTitle || "Checking support details...",
+      loadingSteps: result.loadingSteps?.length ? result.loadingSteps : inferLoadingSteps(question),
+      scenario: result.scenario,
+      usedLLM: result.usedLLM,
     };
+  }
+
+  function startSuggestedQuestion(prompt: string) {
+    setInputValue("");
+    void runAssessment(prompt, inferVariables(prompt), "loading");
   }
 
   function openSource(source: Source) {
@@ -226,8 +392,10 @@ export default function TraceGuideDemo() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "refund_request",
-          product: "Glass Lunch Box",
+          action: "agent_request",
+          // The action is simulated, but it uses the current detected product and variables.
+          product: activeProduct.name,
+          nextAction: activeResponse.nextAction,
           variables,
           sources: activeResponse.sources.map((source) => source.title),
         }),
@@ -240,9 +408,9 @@ export default function TraceGuideDemo() {
       setAction({
         requestId: "RF-DEMO",
         steps: [
-          "Creating refund request",
-          "Attaching your uploaded photos",
-          "Submitting request to seller",
+          "Preparing support request",
+          "Attaching relevant details",
+          "Sending request to seller",
           "Notifying you of updates",
         ],
       });
@@ -267,14 +435,14 @@ export default function TraceGuideDemo() {
     setInputValue("");
     setUserApproved(false);
     setAction(null);
-    void runAssessment(trimmed, variables, "loading");
+    void runAssessment(trimmed, inferVariables(trimmed), "loading");
   }
 
   const actionSteps = useMemo(
     () =>
       action?.steps || [
         "Creating refund request",
-        "Attaching your uploaded photos",
+        "Adding evidence details",
         "Submitting request to seller",
         "Notifying you of updates",
       ],
@@ -296,19 +464,28 @@ export default function TraceGuideDemo() {
         </header>
 
         <section className={styles.conversation}>
-          <UserQuestion question={question} />
-          <ProductCard />
+          {phase === "idle" ? (
+            <AssistantRow>
+              <WelcomeCard onPickQuestion={startSuggestedQuestion} />
+            </AssistantRow>
+          ) : (
+            <>
+              <UserQuestion question={question || defaultQuestion} />
+              <ProductCard product={activeProduct} />
+            </>
+          )}
 
           {(phase === "loading" || phase === "rechecking") && (
             <AssistantRow>
               <StatusCard
-                title={phase === "rechecking" ? "Rechecking eligibility..." : "Checking refund eligibility..."}
+                title={phase === "rechecking" ? "Rechecking assessment..." : inferLoadingTitle(question)}
                 subtitle={
                   phase === "rechecking"
                     ? "I’m checking the updated details against the order and policy."
                     : "This usually takes less than 30 seconds."
                 }
                 activeStep={loadingStep}
+                steps={activeLoadingSteps}
               />
             </AssistantRow>
           )}
@@ -344,7 +521,7 @@ export default function TraceGuideDemo() {
               {!userApproved && (
                 <AssistantRow compact>
                   <div>
-                    <div className={styles.askBubble}>Would you like me to start a refund request?</div>
+                    <div className={styles.askBubble}>Would you like me to {activeResponse.nextAction}?</div>
                     <div className={styles.quickReplies}>
                       <button type="button" onClick={startRefundRequest}>
                         Yes
@@ -362,8 +539,8 @@ export default function TraceGuideDemo() {
               <div className={styles.userReply}>Yes, please</div>
               <AssistantRow>
                 <article className={styles.actionCard}>
-                  <h2>Great, I’ll handle the refund request for you.</h2>
-                  <p>Preparing your refund request...</p>
+                  <h2>Great, I’ll prepare this request for you.</h2>
+                  <p>Preparing the request with your order details and checked sources...</p>
                   <div className={styles.actionSteps}>
                     {actionSteps.map((step, index) => (
                       <div key={step} className={index <= actionStep ? styles.actionActive : ""}>
@@ -454,22 +631,42 @@ function UserQuestion({ question }: { question: string }) {
   );
 }
 
-function ProductCard() {
+function WelcomeCard({ onPickQuestion }: { onPickQuestion: (question: string) => void }) {
+  return (
+    <article className={styles.welcomeCard}>
+      <h2>Hi, I’m TraceGuide Support.</h2>
+      <p>
+        I can check orders, product information and store policies before helping you start a
+        support request.
+      </p>
+      <div className={styles.suggestionGrid} aria-label="Suggested questions">
+        {suggestedQuestions.map((item) => (
+          <button key={item.text} type="button" onClick={() => onPickQuestion(item.text)}>
+            <span>{item.label}</span>
+            {item.text}
+          </button>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function ProductCard({ product }: { product: ProductContext }) {
   return (
     <article className={styles.productCard}>
       <Image
-        src="/traceguide-glass-lunch-box.png"
-        alt="Glass lunch box"
+        src={productImageSrc(product)}
+        alt={product.name}
         width={320}
         height={320}
         priority
       />
       <div>
-        <h2>Glass Lunch Box</h2>
+        <h2>{product.name}</h2>
         <p>
-          <span>✓</span> Delivered 2 days ago
+          <span>✓</span> {product.status}
         </p>
-        <button type="button">Order details</button>
+        <button type="button">{product.linkLabel}</button>
       </div>
       <span className={styles.chevron} aria-hidden="true">
         ›
@@ -499,17 +696,19 @@ function StatusCard({
   title,
   subtitle,
   activeStep,
+  steps,
 }: {
   title: string;
   subtitle: string;
   activeStep: number;
+  steps: string[];
 }) {
   return (
     <article className={styles.statusCard}>
       <h2>{title}</h2>
       <p>{subtitle}</p>
       <div className={styles.statusSteps}>
-        {loadingSteps.map((step, index) => {
+        {steps.map((step, index) => {
           const state = index < activeStep ? "done" : index === activeStep ? "active" : "pending";
           return (
             <div key={step} className={styles[state]}>
