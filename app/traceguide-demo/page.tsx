@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import styles from "./traceguide-demo.module.css";
 
@@ -46,10 +46,18 @@ const defaultQuestion = "The glass lunch box arrived damaged. Can I return it?";
 
 type ProductContext = {
   name: string;
-  image: "glass-box" | "cookies" | "container-set";
+  image: "glass-box" | "cookies" | "container-set" | "yoghurt" | "sandwich" | "snack";
   detail: string;
   status: string;
   linkLabel: string;
+};
+
+type StudyTask = {
+  id: string;
+  set: "1" | "2";
+  category: "Clear eligible refund" | "Boundary exception" | "Insufficient evidence";
+  label: string;
+  text: string;
 };
 
 const defaultProduct: ProductContext = {
@@ -60,22 +68,48 @@ const defaultProduct: ProductContext = {
   linkLabel: "Order details",
 };
 
-const suggestedQuestions = [
+const studyTasks: StudyTask[] = [
   {
+    id: "S1-T1",
+    set: "1",
+    category: "Clear eligible refund",
     label: "Damaged lunch box",
     text: "The glass lunch box arrived damaged. Can I return it?",
   },
   {
+    id: "S1-T2",
+    set: "1",
+    category: "Boundary exception",
+    label: "Changed mind on yoghurt",
+    text: "The chilled yoghurt is unopened, but I changed my mind. Can I return it?",
+  },
+  {
+    id: "S1-T3",
+    set: "1",
+    category: "Insufficient evidence",
     label: "Damaged food item",
     text: "The cookies arrived damaged. Can I get a refund?",
   },
   {
-    label: "Delivery compensation",
-    text: "My order arrived two days late. Can I get compensation?",
+    id: "S2-T1",
+    set: "2",
+    category: "Clear eligible refund",
+    label: "Broken container lid",
+    text: "The glass food container lid arrived broken. Can I get a replacement or refund?",
   },
   {
-    label: "Allergen check",
-    text: "I’m allergic to peanuts. Can I eat these milk cookies?",
+    id: "S2-T2",
+    set: "2",
+    category: "Boundary exception",
+    label: "Changed mind on sandwich",
+    text: "The fresh sandwich is unopened, but I changed my mind. Can I return it?",
+  },
+  {
+    id: "S2-T3",
+    set: "2",
+    category: "Insufficient evidence",
+    label: "Snack package damaged",
+    text: "The snack package arrived damaged, but I have not added a photo yet. Can I get a refund?",
   },
 ];
 
@@ -146,6 +180,36 @@ function includesAny(text: string, terms: string[]) {
 }
 
 function inferProduct(prompt: string): ProductContext {
+  if (includesAny(prompt, ["yoghurt", "yogurt", "chilled", "酸奶", "冷藏"])) {
+    return {
+      name: "Chilled Yoghurt",
+      image: "yoghurt",
+      detail: "4 x 125g",
+      status: "Delivered today",
+      linkLabel: "Product details",
+    };
+  }
+
+  if (includesAny(prompt, ["sandwich", "三明治"])) {
+    return {
+      name: "Fresh Sandwich",
+      image: "sandwich",
+      detail: "1 pack",
+      status: "Delivered today",
+      linkLabel: "Product details",
+    };
+  }
+
+  if (includesAny(prompt, ["snack", "snacks", "package damaged", "零食", "包装"])) {
+    return {
+      name: "Snack Pack",
+      image: "snack",
+      detail: "6-pack",
+      status: "Delivered yesterday",
+      linkLabel: "Order details",
+    };
+  }
+
   if (includesAny(prompt, ["cookie", "cookies", "biscuit", "food", "allergen", "peanut", "饼干", "食品", "过敏", "花生"])) {
     return {
       name: "Milk Cookies",
@@ -176,6 +240,33 @@ function inferProduct(prompt: string): ProductContext {
 }
 
 function inferVariables(prompt: string): TraceVariables {
+  if (includesAny(prompt, ["yoghurt", "yogurt", "chilled", "酸奶", "冷藏"])) {
+    return {
+      issueIdentified: "Change-of-mind chilled food return",
+      request: "Return & Refund",
+      reason: "Customer changed their mind",
+      evidence: "No quality issue reported",
+    };
+  }
+
+  if (includesAny(prompt, ["sandwich", "三明治"])) {
+    return {
+      issueIdentified: "Change-of-mind fresh food return",
+      request: "Return & Refund",
+      reason: "Customer changed their mind",
+      evidence: "No quality issue reported",
+    };
+  }
+
+  if (includesAny(prompt, ["snack", "package damaged", "零食", "包装破损"])) {
+    return {
+      issueIdentified: "Damaged package",
+      request: "Return & Refund",
+      reason: "Package damage reported",
+      evidence: "Photo not added",
+    };
+  }
+
   if (includesAny(prompt, ["allergen", "peanut", "过敏", "花生"])) {
     return {
       issueIdentified: "Allergen concern",
@@ -216,6 +307,9 @@ function inferVariables(prompt: string): TraceVariables {
 }
 
 function inferLoadingTitle(prompt: string) {
+  if (includesAny(prompt, ["yoghurt", "yogurt", "chilled", "酸奶", "冷藏"])) return "Checking chilled food return rules...";
+  if (includesAny(prompt, ["sandwich", "三明治"])) return "Checking fresh food return rules...";
+  if (includesAny(prompt, ["snack", "package damaged", "零食", "包装破损"])) return "Checking evidence needed...";
   if (includesAny(prompt, ["allergen", "peanut", "过敏", "花生"])) return "Checking product safety...";
   if (includesAny(prompt, ["late", "delay", "delayed", "compensation", "延迟", "补偿"])) return "Checking delivery compensation...";
   if (includesAny(prompt, ["missing", "accessory", "缺少", "少了", "配件"])) return "Checking support options...";
@@ -224,6 +318,18 @@ function inferLoadingTitle(prompt: string) {
 }
 
 function inferLoadingSteps(prompt: string) {
+  if (includesAny(prompt, ["yoghurt", "yogurt", "chilled", "酸奶", "冷藏"])) {
+    return ["Understanding your request", "Checking product type", "Reading food return exception", "Preparing answer"];
+  }
+
+  if (includesAny(prompt, ["sandwich", "三明治"])) {
+    return ["Understanding your request", "Checking product type", "Reading fresh food exception", "Preparing answer"];
+  }
+
+  if (includesAny(prompt, ["snack", "package damaged", "零食", "包装破损"])) {
+    return ["Understanding your issue", "Checking order status", "Reading evidence rule", "Preparing answer"];
+  }
+
   if (includesAny(prompt, ["allergen", "peanut", "过敏", "花生"])) {
     return ["Understanding allergy concern", "Reading ingredients", "Checking safety rule", "Preparing answer"];
   }
@@ -244,12 +350,18 @@ function inferLoadingSteps(prompt: string) {
 }
 
 function productImageSrc(product: ProductContext) {
+  if (product.image === "yoghurt") return "/traceguide-yoghurt.svg";
+  if (product.image === "sandwich") return "/traceguide-sandwich.svg";
+  if (product.image === "snack") return "/traceguide-snack.svg";
   if (product.image === "cookies") return "/traceguide-cookie.png";
   if (product.image === "container-set") return "/traceguide-container-set.png";
   return "/traceguide-glass-lunch-box.png";
 }
 
 export default function TraceGuideDemo() {
+  const [participantCode, setParticipantCode] = useState("");
+  const [clientSessionId, setClientSessionId] = useState("");
+  const [activeTask, setActiveTask] = useState<StudyTask | null>(null);
   const [question, setQuestion] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [response, setResponse] = useState<TraceResponse | null>(null);
@@ -270,21 +382,61 @@ export default function TraceGuideDemo() {
     ? response.loadingSteps
     : inferLoadingSteps(question);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const participant = params.get("pid") || params.get("participant") || "";
+    const taskId = params.get("task") || params.get("taskId") || "";
+    const nextTask = studyTasks.find((task) => task.id.toLowerCase() === taskId.toLowerCase()) || null;
+    setParticipantCode(participant);
+    setClientSessionId(window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    if (nextTask) setActiveTask(nextTask);
+  }, []);
+
+  function logStudyEvent(eventName: string, payload: Record<string, unknown> = {}) {
+    void fetch("/api/study-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: clientSessionId,
+        participantCode,
+        condition: "traceguide",
+        taskId: typeof payload.taskId === "string" ? payload.taskId : activeTask?.id || null,
+        eventName,
+        payload,
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+      }),
+    }).catch((error) => console.warn("Study event was not saved", error));
+  }
+
   async function runAssessment(
     prompt: string,
     nextVariables: TraceVariables,
-    nextPhase: "loading" | "rechecking"
+    nextPhase: "loading" | "rechecking",
+    taskOverride?: StudyTask | null
   ) {
+    const taskForRun = taskOverride === null ? null : taskOverride ?? activeTask;
     setPhase(nextPhase);
     setLoadingStep(0);
     setSheetMode(null);
     setSelectedSource(null);
     setQuestion(prompt);
     setPreviewProduct(inferProduct(prompt));
+    if (taskOverride) setActiveTask(taskOverride);
     if (nextPhase === "loading") {
       setResponse(null);
       setAction(null);
       setUserApproved(false);
+      logStudyEvent("task_started", {
+        question: prompt,
+        taskId: taskForRun?.id,
+        scenarioSet: taskForRun?.set,
+        taskCategory: taskForRun?.category,
+      });
+    } else {
+      logStudyEvent("variables_saved_recheck_started", {
+        question: prompt,
+        variables: nextVariables,
+      });
     }
 
     const interval = window.setInterval(() => {
@@ -298,6 +450,7 @@ export default function TraceGuideDemo() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: prompt,
+          taskId: taskForRun?.id,
           variables: nextVariables,
       product: {
             name: inferProduct(prompt).name,
@@ -312,6 +465,15 @@ export default function TraceGuideDemo() {
 
       setResponse(normaliseResponse(result));
       setVariables(normaliseResponse(result).variables);
+      logStudyEvent(nextPhase === "rechecking" ? "updated_answer_shown" : "answer_shown", {
+        question: prompt,
+        taskId: taskForRun?.id,
+        scenario: result.scenario,
+        confidence: result.confidence,
+        usedLLM: result.usedLLM,
+        answer: result.answer,
+        sources: result.sources,
+      });
     } catch (error) {
       console.error(error);
       setResponse(fallbackResponse);
@@ -339,14 +501,19 @@ export default function TraceGuideDemo() {
     };
   }
 
-  function startSuggestedQuestion(prompt: string) {
+  function startSuggestedQuestion(prompt: string, task?: StudyTask) {
     setInputValue("");
-    void runAssessment(prompt, inferVariables(prompt), "loading");
+    void runAssessment(prompt, inferVariables(prompt), "loading", task || null);
   }
 
   function openSource(source: Source) {
     setSelectedSource(source);
     setSheetMode("sourceOverview");
+    logStudyEvent("source_anchor_opened", {
+      sourceNumber: source.number,
+      sourceTitle: source.title,
+      sourceCategory: source.category,
+    });
   }
 
   function renderAnswer(answer: string, sources: Source[]) {
@@ -386,6 +553,11 @@ export default function TraceGuideDemo() {
     setUserApproved(true);
     setPhase("action");
     setActionStep(0);
+    logStudyEvent("yes_clicked", {
+      nextAction: activeResponse.nextAction,
+      variables,
+      product: activeProduct.name,
+    });
 
     try {
       const apiResponse = await fetch("/api/traceguide-action", {
@@ -435,7 +607,8 @@ export default function TraceGuideDemo() {
     setInputValue("");
     setUserApproved(false);
     setAction(null);
-    void runAssessment(trimmed, inferVariables(trimmed), "loading");
+    setActiveTask(null);
+    void runAssessment(trimmed, inferVariables(trimmed), "loading", null);
   }
 
   const actionSteps = useMemo(
@@ -466,7 +639,7 @@ export default function TraceGuideDemo() {
         <section className={styles.conversation}>
           {phase === "idle" ? (
             <AssistantRow>
-              <WelcomeCard onPickQuestion={startSuggestedQuestion} />
+              <WelcomeCard onPickQuestion={startSuggestedQuestion} activeTask={activeTask} />
             </AssistantRow>
           ) : (
             <>
@@ -506,11 +679,25 @@ export default function TraceGuideDemo() {
                   </div>
                   <hr />
                   <div className={styles.answerActions}>
-                    <button type="button" onClick={() => setSheetMode("sourcesUsed")}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSheetMode("sourcesUsed");
+                        logStudyEvent("view_sources_clicked", {
+                          sources: activeResponse.sources.map((source) => source.title),
+                        });
+                      }}
+                    >
                       <span aria-hidden="true">▤</span>
                       View sources
                     </button>
-                    <button type="button" onClick={() => setSheetMode("variables")}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSheetMode("variables");
+                        logStudyEvent("edit_key_variables_clicked", { variables });
+                      }}
+                    >
                       <span aria-hidden="true">☷</span>
                       Edit key variables
                     </button>
@@ -526,7 +713,12 @@ export default function TraceGuideDemo() {
                       <button type="button" onClick={startRefundRequest}>
                         Yes
                       </button>
-                      <button type="button">No</button>
+                      <button
+                        type="button"
+                        onClick={() => logStudyEvent("no_clicked", { nextAction: activeResponse.nextAction })}
+                      >
+                        No
+                      </button>
                     </div>
                   </div>
                 </AssistantRow>
@@ -631,7 +823,14 @@ function UserQuestion({ question }: { question: string }) {
   );
 }
 
-function WelcomeCard({ onPickQuestion }: { onPickQuestion: (question: string) => void }) {
+function WelcomeCard({
+  onPickQuestion,
+  activeTask,
+}: {
+  onPickQuestion: (question: string, task?: StudyTask) => void;
+  activeTask: StudyTask | null;
+}) {
+  const visibleTasks = activeTask ? [activeTask] : studyTasks;
   return (
     <article className={styles.welcomeCard}>
       <h2>Hi, I’m TraceGuide Support.</h2>
@@ -640,8 +839,8 @@ function WelcomeCard({ onPickQuestion }: { onPickQuestion: (question: string) =>
         support request.
       </p>
       <div className={styles.suggestionGrid} aria-label="Suggested questions">
-        {suggestedQuestions.map((item) => (
-          <button key={item.text} type="button" onClick={() => onPickQuestion(item.text)}>
+        {visibleTasks.map((item) => (
+          <button key={item.id} type="button" onClick={() => onPickQuestion(item.text, item)}>
             <span>{item.label}</span>
             {item.text}
           </button>
@@ -839,25 +1038,42 @@ function VariablesSheet({
         <SelectField
           label="Issue identified"
           value={variables.issueIdentified}
-          options={["Damaged item", "Missing accessory", "Late delivery", "Product safety question"]}
+          options={[
+            "Damaged item",
+            "Broken lid",
+            "Damaged package",
+            "Damaged food item",
+            "Change-of-mind chilled food return",
+            "Change-of-mind fresh food return",
+            "Missing accessory",
+            "Late delivery",
+            "Product safety question",
+          ]}
           onChange={(value) => updateVariable("issueIdentified", value)}
         />
         <SelectField
           label="Request"
           value={variables.request}
-          options={["Return & Refund", "Exchange", "Ask seller", "Human support"]}
+          options={["Return & Refund", "Replacement or refund", "Exchange", "Ask seller", "Human support"]}
           onChange={(value) => updateVariable("request", value)}
         />
         <SelectField
           label="Reason"
           value={variables.reason}
-          options={["Item arrived damaged", "Changed my mind", "Wrong item received", "Unsafe to use"]}
+          options={[
+            "Item arrived damaged",
+            "Lid was broken on arrival",
+            "Package damage reported",
+            "Customer changed their mind",
+            "Wrong item received",
+            "Unsafe to use",
+          ]}
           onChange={(value) => updateVariable("reason", value)}
         />
         <SelectField
           label="Evidence"
           value={variables.evidence}
-          options={["Photos provided", "Photo not added", "Packaging kept", "Not sure"]}
+          options={["Photos provided", "Photos helpful", "Photo not added", "Packaging kept", "No quality issue reported", "Not sure"]}
           onChange={(value) => updateVariable("evidence", value)}
         />
       </div>

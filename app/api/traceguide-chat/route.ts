@@ -22,7 +22,7 @@ type TraceVariables = {
 
 type ProductContext = {
   name: string;
-  image: "glass-box" | "cookies" | "container-set";
+  image: "glass-box" | "cookies" | "container-set" | "yoghurt" | "sandwich" | "snack";
   detail: string;
   status: string;
   linkLabel: string;
@@ -30,7 +30,11 @@ type ProductContext = {
 
 type ScenarioKey =
   | "glass_damaged_refund"
+  | "glass_container_broken"
+  | "chilled_yoghurt_change_mind"
+  | "fresh_sandwich_change_mind"
   | "damaged_food_return"
+  | "snack_package_evidence_unclear"
   | "late_delivery_compensation"
   | "allergen_safety"
   | "missing_accessory"
@@ -74,6 +78,38 @@ const demoKnowledge: KnowledgeDoc[] = [
     status: "active",
     content:
       "Opened food products usually cannot be returned for hygiene reasons. If the product is damaged, unsafe, expired, or has a quality issue, support should offer a refund or replacement based on evidence.",
+  },
+  {
+    id: "demo-chilled-food-exception",
+    title: "Chilled food return exception",
+    category: "Return",
+    status: "active",
+    content:
+      "Chilled or perishable food cannot usually be returned for change-of-mind reasons, even if unopened. If there is a quality issue, temperature problem, damaged packaging, or safety concern, support should review evidence and may offer a refund or replacement.",
+  },
+  {
+    id: "demo-fresh-food-exception",
+    title: "Fresh food return exception",
+    category: "Return",
+    status: "active",
+    content:
+      "Fresh or perishable food, including sandwiches and chilled meals, cannot usually be returned because the customer changed their mind. If the product is unsafe, spoiled, damaged, expired, or incorrectly delivered, support should review evidence and may offer a refund or replacement.",
+  },
+  {
+    id: "demo-yoghurt-order-status",
+    title: "Order status — Chilled Yoghurt",
+    category: "Order status",
+    status: "active",
+    content:
+      "The Chilled Yoghurt order was delivered today. The item is unopened and the delivery record shows it arrived within the expected cold-chain window.",
+  },
+  {
+    id: "demo-change-mind-return-policy",
+    title: "Change-of-mind return policy",
+    category: "Return",
+    status: "active",
+    content:
+      "Standard non-perishable items can usually be returned within 30 days if unused and in original packaging. Product-specific exceptions, such as chilled food and hygiene-sensitive goods, override the general return window.",
   },
   {
     id: "demo-late-delivery-compensation",
@@ -122,6 +158,54 @@ const demoKnowledge: KnowledgeDoc[] = [
     status: "active",
     content:
       "The Glass Food Containers Set order was marked delivered today. The product page lists four containers and matching lids as included accessories.",
+  },
+  {
+    id: "demo-glass-container-order-status",
+    title: "Order status — Glass Food Container",
+    category: "Order status",
+    status: "active",
+    content:
+      "The Glass Food Container order was delivered yesterday. The customer reported that the lid was broken on arrival. The item is inside the return window.",
+  },
+  {
+    id: "demo-broken-container-policy",
+    title: "Replacement and refund options for broken container",
+    category: "Refund",
+    status: "active",
+    content:
+      "If a reusable container or lid arrives broken, support can prepare a replacement request or refund request after the customer confirms the issue. Photos help the seller review the case faster.",
+  },
+  {
+    id: "demo-fresh-sandwich-order-status",
+    title: "Order status — Fresh Sandwich",
+    category: "Order status",
+    status: "active",
+    content:
+      "The Fresh Sandwich order was delivered today. The item is unopened. No quality issue, temperature issue or incorrect delivery has been reported.",
+  },
+  {
+    id: "demo-snack-package-evidence-status",
+    title: "Snack package evidence status",
+    category: "Evidence",
+    status: "active",
+    content:
+      "The Snack Pack order was delivered yesterday. The customer reported damaged packaging, but no photo evidence has been added yet. The support request should not be submitted for seller review until evidence is added or the case is sent to human support.",
+  },
+  {
+    id: "demo-snack-order-status",
+    title: "Order status — Snack Pack",
+    category: "Order status",
+    status: "active",
+    content:
+      "The Snack Pack order was delivered yesterday. The delivery record is available, but the evidence field is currently incomplete.",
+  },
+  {
+    id: "demo-photo-evidence-rule",
+    title: "Photo evidence rule for damaged package",
+    category: "Store policy",
+    status: "active",
+    content:
+      "When a package is damaged but the extent of product damage is unclear, support should ask for a photo or send the case to human support before starting a refund or replacement request.",
   },
   {
     id: "demo-delayed-order-status",
@@ -206,6 +290,96 @@ const scenarios: Record<Exclude<ScenarioKey, "unknown">, Scenario> = {
       return `Yes, this item is likely eligible for a return and refund.\n\nYour order is still within the return window according to the return policy [${policy}]. The order status shows it was delivered recently [${order}]. Please keep the item and packaging if possible.`;
     },
   },
+  glass_container_broken: {
+    key: "glass_container_broken",
+    product: {
+      name: "Glass Food Container",
+      image: "container-set",
+      detail: "1 item",
+      status: "Delivered yesterday",
+      linkLabel: "Order details",
+    },
+    variables: {
+      issueIdentified: "Broken lid",
+      request: "Replacement or refund",
+      reason: "Lid was broken on arrival",
+      evidence: "Photos helpful",
+    },
+    nextAction: "prepare a replacement or refund request",
+    sourceTags: ["Refund policy", "Order status", "Store policy"],
+    loadingTitle: "Checking replacement options...",
+    loadingSteps: ["Understanding your request", "Checking order status", "Reading support options", "Preparing answer"],
+    sourceMatchers: [
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["broken container", "lid arrives broken", "replacement request", "reusable container"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Glass Food Container", "delivered yesterday", "lid was broken"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["photo", "seller review", "store return note"]),
+    ],
+    answerTemplate: (sources) => {
+      const policy = sourceNumber(sources, (source) => /refund|replacement/i.test(source.category + source.title), 1);
+      const order = sourceNumber(sources, (source) => /order/i.test(source.category), 2);
+      return `Yes, this looks suitable for a replacement or refund request.\n\nThe order record says the container was delivered yesterday and the lid was reported broken on arrival [${order}]. The support policy allows a replacement or refund request for broken reusable items after you confirm the issue [${policy}].`;
+    },
+  },
+  chilled_yoghurt_change_mind: {
+    key: "chilled_yoghurt_change_mind",
+    product: {
+      name: "Chilled Yoghurt",
+      image: "yoghurt",
+      detail: "4 x 125g",
+      status: "Delivered today",
+      linkLabel: "Product details",
+    },
+    variables: {
+      issueIdentified: "Change-of-mind chilled food return",
+      request: "Return & Refund",
+      reason: "Customer changed their mind",
+      evidence: "No quality issue reported",
+    },
+    nextAction: "send this to human support for review",
+    sourceTags: ["Food exception", "Order status", "Return policy"],
+    loadingTitle: "Checking chilled food return rules...",
+    loadingSteps: ["Understanding your request", "Checking product type", "Reading food return exception", "Preparing answer"],
+    sourceMatchers: [
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Chilled food return exception", "chilled", "perishable", "change-of-mind"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Chilled Yoghurt", "cold-chain", "delivered today"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Change-of-mind", "non-perishable", "exceptions"]),
+    ],
+    answerTemplate: (sources) => {
+      const exception = sourceNumber(sources, (source) => /return/i.test(source.category + source.title), 1);
+      const order = sourceNumber(sources, (source) => /order/i.test(source.category), 2);
+      return `I would not recommend starting a standard return for this item.\n\nYour order was delivered today and appears unopened [${order}], but chilled food is usually excluded from change-of-mind returns unless there is a quality, temperature, packaging, or safety issue [${exception}]. If you think there is a quality problem, I can send the details to human support for review.`;
+    },
+  },
+  fresh_sandwich_change_mind: {
+    key: "fresh_sandwich_change_mind",
+    product: {
+      name: "Fresh Sandwich",
+      image: "sandwich",
+      detail: "1 pack",
+      status: "Delivered today",
+      linkLabel: "Product details",
+    },
+    variables: {
+      issueIdentified: "Change-of-mind fresh food return",
+      request: "Return & Refund",
+      reason: "Customer changed their mind",
+      evidence: "No quality issue reported",
+    },
+    nextAction: "send this to human support for review",
+    sourceTags: ["Food exception", "Order status", "Return policy"],
+    loadingTitle: "Checking fresh food return rules...",
+    loadingSteps: ["Understanding your request", "Checking product type", "Reading food exception", "Preparing answer"],
+    sourceMatchers: [
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Fresh food return exception", "fresh", "sandwich", "perishable", "changed their mind"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Fresh Sandwich", "delivered today", "unopened"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Change-of-mind", "exceptions", "non-perishable"]),
+    ],
+    answerTemplate: (sources) => {
+      const exception = sourceNumber(sources, (source) => /return/i.test(source.category + source.title), 1);
+      const order = sourceNumber(sources, (source) => /order/i.test(source.category), 2);
+      return `I would not recommend starting a standard return for this item.\n\nThe order record says the sandwich was delivered today and no quality issue has been reported [${order}]. Fresh or perishable food is usually excluded from change-of-mind returns unless there is a safety, quality, temperature, or delivery problem [${exception}].`;
+    },
+  },
   damaged_food_return: {
     key: "damaged_food_return",
     product: {
@@ -219,7 +393,7 @@ const scenarios: Record<Exclude<ScenarioKey, "unknown">, Scenario> = {
       issueIdentified: "Damaged food item",
       request: "Return & Refund",
       reason: "Food arrived damaged",
-      evidence: "Photos needed",
+      evidence: "Photo not added",
     },
     nextAction: "prepare a return request",
     sourceTags: ["Food return rule", "Order status", "Store policy"],
@@ -233,7 +407,37 @@ const scenarios: Record<Exclude<ScenarioKey, "unknown">, Scenario> = {
     answerTemplate: (sources) => {
       const foodRule = sourceNumber(sources, (source) => /return/i.test(source.category + source.title), 1);
       const order = sourceNumber(sources, (source) => source.category.toLowerCase().includes("order"), 2);
-      return `This can usually be reviewed if the food item arrived damaged.\n\nFood products are normally restricted for hygiene reasons, but damaged or unsafe items can be refunded or replaced when there is evidence [${foodRule}]. Your order was delivered recently [${order}], so I can help prepare a return request with photos.`;
+      return `This can usually be reviewed, but evidence is needed before a refund request is ready.\n\nFood products are normally restricted for hygiene reasons, but damaged or unsafe items can be refunded or replaced when there is evidence [${foodRule}]. Your order was delivered recently [${order}], so the next step is to add photos of the item and packaging.`;
+    },
+  },
+  snack_package_evidence_unclear: {
+    key: "snack_package_evidence_unclear",
+    product: {
+      name: "Snack Pack",
+      image: "snack",
+      detail: "6-pack",
+      status: "Delivered yesterday",
+      linkLabel: "Order details",
+    },
+    variables: {
+      issueIdentified: "Damaged package",
+      request: "Return & Refund",
+      reason: "Package damage reported",
+      evidence: "Photo not added",
+    },
+    nextAction: "ask for photos before starting a refund request",
+    sourceTags: ["Evidence needed", "Order status", "Store policy"],
+    loadingTitle: "Checking evidence needed...",
+    loadingSteps: ["Understanding your issue", "Checking order status", "Reading evidence rule", "Preparing answer"],
+    sourceMatchers: [
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Snack package evidence", "no photo evidence", "not be submitted"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Snack Pack", "delivered yesterday", "evidence field"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Photo evidence rule", "damaged package", "human support"]),
+    ],
+    answerTemplate: (sources) => {
+      const evidence = sourceNumber(sources, (source) => /evidence|photo/i.test(source.category + source.title), 1);
+      const order = sourceNumber(sources, (source) => /order/i.test(source.category), 2);
+      return `I would not start a refund request yet.\n\nThe order record is available [${order}], but the evidence field is still incomplete. When package damage is unclear, the support rule says a photo or human review is needed before starting a refund or replacement request [${evidence}].`;
     },
   },
   late_delivery_compensation: {
@@ -358,12 +562,32 @@ const unknownScenario: Scenario = {
   },
 };
 
-function detectScenario(question: string): Scenario {
+function detectScenario(question: string, taskId?: string): Scenario {
+  const task = (taskId || "").toUpperCase();
+  if (task === "S1-T1") return scenarios.glass_damaged_refund;
+  if (task === "S1-T2") return scenarios.chilled_yoghurt_change_mind;
+  if (task === "S1-T3") return scenarios.damaged_food_return;
+  if (task === "S2-T1") return scenarios.glass_container_broken;
+  if (task === "S2-T2") return scenarios.fresh_sandwich_change_mind;
+  if (task === "S2-T3") return scenarios.snack_package_evidence_unclear;
+
   const q = question.toLowerCase();
 
+  if (includesAny(q, ["sandwich", "fresh sandwich", "三明治", "鲜食"])) {
+    return scenarios.fresh_sandwich_change_mind;
+  }
+  if (includesAny(q, ["yoghurt", "yogurt", "chilled", "cold", "refrigerated", "perishable", "酸奶", "冷藏", "生鲜"])) {
+    return scenarios.chilled_yoghurt_change_mind;
+  }
+  if (includesAny(q, ["snack", "snacks", "package damage", "damaged package", "薯片", "零食", "包装破损"])) {
+    return scenarios.snack_package_evidence_unclear;
+  }
   if (includesAny(q, ["peanut", "allergen", "allergic", "过敏", "花生"])) return scenarios.allergen_safety;
   if (includesAny(q, ["late", "delay", "delayed", "compensation", "迟", "延迟", "补偿"])) return scenarios.late_delivery_compensation;
   if (includesAny(q, ["missing accessory", "missing lid", "accessory", "缺少", "少了", "配件"])) return scenarios.missing_accessory;
+  if (includesAny(q, ["lid broken", "container lid", "food container", "container arrived broken", "盖子坏", "保鲜盒"])) {
+    return scenarios.glass_container_broken;
+  }
   if (includesAny(q, ["food", "cookie", "cookies", "biscuit", "snack", "食品", "饼干", "吃的"])) return scenarios.damaged_food_return;
   if (includesAny(q, ["glass", "lunch box", "damaged", "broken", "return", "refund", "玻璃", "破损", "损坏", "退货", "退款"])) {
     return scenarios.glass_damaged_refund;
@@ -436,6 +660,11 @@ function buildSources(docs: RankedDoc[]) {
 
 function sourceTags(scenario: Scenario, sources: BuyerSource[]) {
   const tags = sources.map((source) => {
+    if (
+      (scenario.key === "chilled_yoghurt_change_mind" || scenario.key === "fresh_sandwich_change_mind") &&
+      /return|exception/i.test(source.category + source.title)
+    ) return "Food exception";
+    if (scenario.key === "snack_package_evidence_unclear" && /evidence|photo/i.test(source.category + source.title)) return "Evidence needed";
     if (/refund/i.test(source.category)) return scenario.key === "missing_accessory" ? "Missing accessory" : "Return policy";
     if (/return/i.test(source.category)) return "Food return rule";
     if (/logistics/i.test(source.category)) return "Delivery policy";
@@ -566,8 +795,13 @@ function isSafeLLMAnswer(answer: string, scenario: Scenario, sources: BuyerSourc
   const lower = answer.toLowerCase();
   if (scenario.product.name !== "Milk Cookies" && includesAny(lower, ["milk cookies", "cookie order"])) return false;
   if (scenario.product.name !== "Glass Lunch Box" && includesAny(lower, ["glass lunch box"])) return false;
+  if (scenario.product.name !== "Chilled Yoghurt" && includesAny(lower, ["chilled yoghurt", "yoghurt order", "yogurt order"])) return false;
   if (scenario.key === "glass_damaged_refund" && includesAny(lower, ["food item", "food product", "hygiene"])) return false;
   if (scenario.key === "allergen_safety" && includesAny(lower, ["safe to eat", "you can eat"])) return false;
+  if (scenario.key === "chilled_yoghurt_change_mind" && includesAny(lower, ["eligible for a return and refund", "start a standard return"])) return false;
+  if (scenario.key === "fresh_sandwich_change_mind" && includesAny(lower, ["eligible for a return and refund", "start a standard return", "can return it because"])) return false;
+  if (scenario.key === "damaged_food_return" && includesAny(lower, ["you are eligible for a refund", "i can start a refund request", "i can prepare a refund request"])) return false;
+  if (scenario.key === "snack_package_evidence_unclear" && includesAny(lower, ["proceed with your refund request", "start a refund request", "eligible for a refund"])) return false;
 
   return true;
 }
@@ -581,7 +815,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Question is required." }, { status: 400 });
     }
 
-    const scenario = detectScenario(question);
+    const scenario = detectScenario(question, typeof body.taskId === "string" ? body.taskId : undefined);
     const remoteDocs = await fetchKnowledgeDocs();
     const knowledgeDocs = mergeKnowledge(remoteDocs);
     const selectedDocs = pickScenarioDocs(knowledgeDocs, scenario, question);

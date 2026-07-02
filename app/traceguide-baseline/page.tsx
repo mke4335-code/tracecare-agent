@@ -1,15 +1,23 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import styles from "../traceguide-demo/traceguide-demo.module.css";
 
 type ProductContext = {
   name: string;
-  image: "glass-box" | "cookies" | "container-set";
+  image: "glass-box" | "cookies" | "container-set" | "yoghurt" | "sandwich" | "snack";
   detail: string;
   status: string;
   linkLabel: string;
+};
+
+type StudyTask = {
+  id: string;
+  set: "1" | "2";
+  category: "Clear eligible refund" | "Boundary exception" | "Insufficient evidence";
+  label: string;
+  text: string;
 };
 
 type TraceVariables = {
@@ -47,13 +55,55 @@ const defaultVariables: TraceVariables = {
   evidence: "Photos needed",
 };
 
-const suggestedQuestions = [
-  "The glass lunch box arrived damaged. Can I return it?",
-  "The cookies arrived damaged. Can I get a refund?",
-  "My order arrived two days late. Can I get compensation?",
+const studyTasks: StudyTask[] = [
+  {
+    id: "S1-T1",
+    set: "1",
+    category: "Clear eligible refund",
+    label: "Damaged lunch box",
+    text: "The glass lunch box arrived damaged. Can I return it?",
+  },
+  {
+    id: "S1-T2",
+    set: "1",
+    category: "Boundary exception",
+    label: "Changed mind on yoghurt",
+    text: "The chilled yoghurt is unopened, but I changed my mind. Can I return it?",
+  },
+  {
+    id: "S1-T3",
+    set: "1",
+    category: "Insufficient evidence",
+    label: "Damaged food item",
+    text: "The cookies arrived damaged. Can I get a refund?",
+  },
+  {
+    id: "S2-T1",
+    set: "2",
+    category: "Clear eligible refund",
+    label: "Broken container lid",
+    text: "The glass food container lid arrived broken. Can I get a replacement or refund?",
+  },
+  {
+    id: "S2-T2",
+    set: "2",
+    category: "Boundary exception",
+    label: "Changed mind on sandwich",
+    text: "The fresh sandwich is unopened, but I changed my mind. Can I return it?",
+  },
+  {
+    id: "S2-T3",
+    set: "2",
+    category: "Insufficient evidence",
+    label: "Snack package damaged",
+    text: "The snack package arrived damaged, but I have not added a photo yet. Can I get a refund?",
+  },
 ];
 
 function productImageSrc(product: ProductContext) {
+  if (product.image === "yoghurt") return "/traceguide-yoghurt.svg";
+  if (product.image === "sandwich") return "/traceguide-sandwich.svg";
+  if (product.image === "snack") return "/traceguide-snack.svg";
   if (product.image === "cookies") return "/traceguide-cookie.png";
   if (product.image === "container-set") return "/traceguide-container-set.png";
   return "/traceguide-glass-lunch-box.png";
@@ -80,6 +130,36 @@ function formatBaselineAnswer(answer: string) {
 
 function inferProductFromQuestion(question: string): ProductContext {
   const q = question.toLowerCase();
+  if (q.includes("yoghurt") || q.includes("yogurt") || q.includes("chilled")) {
+    return {
+      name: "Chilled Yoghurt",
+      image: "yoghurt",
+      detail: "4 x 125g",
+      status: "Delivered today",
+      linkLabel: "Product details",
+    };
+  }
+
+  if (q.includes("sandwich")) {
+    return {
+      name: "Fresh Sandwich",
+      image: "sandwich",
+      detail: "1 pack",
+      status: "Delivered today",
+      linkLabel: "Product details",
+    };
+  }
+
+  if (q.includes("snack") || q.includes("package damaged")) {
+    return {
+      name: "Snack Pack",
+      image: "snack",
+      detail: "6-pack",
+      status: "Delivered yesterday",
+      linkLabel: "Order details",
+    };
+  }
+
   if (q.includes("cookie") || q.includes("food") || q.includes("peanut") || q.includes("allergen")) {
     return {
       name: "Milk Cookies",
@@ -106,6 +186,9 @@ function inferProductFromQuestion(question: string): ProductContext {
 }
 
 export default function TraceGuideBaseline() {
+  const [participantCode, setParticipantCode] = useState("");
+  const [clientSessionId, setClientSessionId] = useState("");
+  const [activeTask, setActiveTask] = useState<StudyTask | null>(null);
   const [phase, setPhase] = useState<"idle" | "loading" | "answer" | "action">("idle");
   const [question, setQuestion] = useState("");
   const [inputValue, setInputValue] = useState("");
@@ -126,23 +209,57 @@ export default function TraceGuideBaseline() {
     [action]
   );
 
-  async function askAgent(nextQuestion: string) {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const participant = params.get("pid") || params.get("participant") || "";
+    const taskId = params.get("task") || params.get("taskId") || "";
+    const nextTask = studyTasks.find((task) => task.id.toLowerCase() === taskId.toLowerCase()) || null;
+    setParticipantCode(participant);
+    setClientSessionId(window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    if (nextTask) setActiveTask(nextTask);
+  }, []);
+
+  function logStudyEvent(eventName: string, payload: Record<string, unknown> = {}) {
+    void fetch("/api/study-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: clientSessionId,
+        participantCode,
+        condition: "baseline",
+        taskId: typeof payload.taskId === "string" ? payload.taskId : activeTask?.id || null,
+        eventName,
+        payload,
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+      }),
+    }).catch((error) => console.warn("Study event was not saved", error));
+  }
+
+  async function askAgent(nextQuestion: string, taskOverride?: StudyTask | null) {
     const trimmed = nextQuestion.trim();
     if (!trimmed) return;
+    const taskForRun = taskOverride === null ? null : taskOverride ?? activeTask;
 
     setQuestion(trimmed);
+    if (taskOverride) setActiveTask(taskOverride);
     setProduct(inferProductFromQuestion(trimmed));
     setResponse(null);
     setAction(null);
     setActionStep(0);
     setPhase("loading");
+    logStudyEvent("task_started", {
+      question: trimmed,
+      taskId: taskForRun?.id,
+      scenarioSet: taskForRun?.set,
+      taskCategory: taskForRun?.category,
+    });
 
     try {
       const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 1100));
       const apiRequest = fetch("/api/traceguide-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmed }),
+        body: JSON.stringify({ question: trimmed, taskId: taskForRun?.id }),
       });
       const [apiResponse] = await Promise.all([apiRequest, minimumDelay]);
       const result = await apiResponse.json();
@@ -156,6 +273,13 @@ export default function TraceGuideBaseline() {
         variables: result.variables || defaultVariables,
         nextAction: result.nextAction || "start a support request",
         product: nextProduct,
+      });
+      logStudyEvent("answer_shown", {
+        question: trimmed,
+        taskId: taskForRun?.id,
+        scenario: result.scenario,
+        answer: result.answer,
+        usedLLM: result.usedLLM,
       });
     } catch (error) {
       console.error(error);
@@ -173,13 +297,19 @@ export default function TraceGuideBaseline() {
 
   function submitQuestion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void askAgent(inputValue);
+    setActiveTask(null);
+    void askAgent(inputValue, null);
     setInputValue("");
   }
 
   async function startRequest() {
     setPhase("action");
     setActionStep(0);
+    logStudyEvent("yes_clicked", {
+      nextAction: response?.nextAction,
+      variables,
+      product: product.name,
+    });
 
     try {
       const apiResponse = await fetch("/api/traceguide-action", {
@@ -235,9 +365,10 @@ export default function TraceGuideBaseline() {
                 <h2>Hi, I’m AI Support.</h2>
                 <p>I can answer questions about your order and help start a support request.</p>
                 <div className={styles.suggestionGrid} aria-label="Suggested questions">
-                  {suggestedQuestions.map((item) => (
-                    <button key={item} type="button" onClick={() => askAgent(item)}>
-                      {item}
+                  {(activeTask ? [activeTask] : studyTasks).map((item) => (
+                    <button key={item.id} type="button" onClick={() => askAgent(item.text, item)}>
+                      <span>{item.label}</span>
+                      {item.text}
                     </button>
                   ))}
                 </div>
@@ -282,7 +413,12 @@ export default function TraceGuideBaseline() {
                       <button type="button" onClick={startRequest}>
                         Yes
                       </button>
-                      <button type="button">No</button>
+                      <button
+                        type="button"
+                        onClick={() => logStudyEvent("no_clicked", { nextAction: response.nextAction })}
+                      >
+                        No
+                      </button>
                     </div>
                   </div>
                 </AssistantRow>

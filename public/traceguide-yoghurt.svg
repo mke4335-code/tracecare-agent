@@ -1,0 +1,12 @@
+<svg width="320" height="320" viewBox="0 0 320 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="320" rx="54" fill="#F7F8FF"/>
+  <ellipse cx="160" cy="255" rx="86" ry="18" fill="#D9DEEF"/>
+  <rect x="90" y="76" width="140" height="164" rx="30" fill="#FFFFFF" stroke="#D9DEEF" stroke-width="8"/>
+  <path d="M101 97C118 82 202 82 219 97V126H101V97Z" fill="#D9F0FF"/>
+  <rect x="108" y="121" width="104" height="88" rx="22" fill="#FFF1F6"/>
+  <path d="M126 160C136 136 184 135 195 160C205 183 183 199 160 199C136 199 116 183 126 160Z" fill="#FF7BA8"/>
+  <circle cx="145" cy="160" r="8" fill="#FFFFFF"/>
+  <circle cx="176" cy="165" r="7" fill="#FFFFFF"/>
+  <path d="M124 104H196" stroke="#4D40FF" stroke-width="8" stroke-linecap="round"/>
+  <text x="160" y="233" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="800" fill="#182034">YOGHURT</text>
+</svg>
