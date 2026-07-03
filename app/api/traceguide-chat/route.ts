@@ -62,6 +62,14 @@ type BuyerSource = {
   matchedAnswer?: string;
 };
 
+type VariableAssessment = {
+  answer?: string;
+  nextAction: string;
+  confidence?: number;
+  taskType?: string;
+  sourceTags?: string[];
+};
+
 const demoKnowledge: KnowledgeDoc[] = [
   {
     id: "demo-damaged-refund-policy",
@@ -713,9 +721,9 @@ function agentStagesFor(scenario: Scenario) {
   }));
 }
 
-function taskTypeFor(scenario: Scenario) {
+function taskTypeFor(scenario: Scenario, variables = scenario.variables) {
   if (scenario.key.includes("change_mind")) return "boundary_exception_review";
-  if (scenario.key.includes("evidence") || scenario.variables.evidence.toLowerCase().includes("photo")) {
+  if (scenario.key.includes("evidence") || variables.evidence.toLowerCase().includes("photo")) {
     return "evidence_required_review";
   }
   if (scenario.key.includes("compensation")) return "delivery_compensation";
@@ -724,13 +732,112 @@ function taskTypeFor(scenario: Scenario) {
   return "refund_or_return_support";
 }
 
-function actionPreviewFor(scenario: Scenario) {
+function actionPreviewFor(scenario: Scenario, nextAction = scenario.nextAction) {
   return {
-    label: scenario.nextAction,
+    label: nextAction,
     requiresUserConfirmation: true,
     simulatedAction: true,
     description:
       "The prototype can prepare a service request for review, but it does not process real payments, refunds, returns or order changes.",
+  };
+}
+
+function cleanVariables(scenario: Scenario, bodyVariables: unknown): TraceVariables {
+  if (!bodyVariables || typeof bodyVariables !== "object") return scenario.variables;
+  const incoming = bodyVariables as Partial<TraceVariables>;
+
+  return {
+    issueIdentified: typeof incoming.issueIdentified === "string" ? incoming.issueIdentified : scenario.variables.issueIdentified,
+    request: typeof incoming.request === "string" ? incoming.request : scenario.variables.request,
+    reason: typeof incoming.reason === "string" ? incoming.reason : scenario.variables.reason,
+    evidence: typeof incoming.evidence === "string" ? incoming.evidence : scenario.variables.evidence,
+  };
+}
+
+function hasAnyValue(text: string, terms: string[]) {
+  return includesAny(text.toLowerCase(), terms.map((term) => term.toLowerCase()));
+}
+
+function sourceRef(sources: BuyerSource[], matcher: (source: BuyerSource) => boolean, fallback: number) {
+  return sourceNumber(sources, matcher, fallback);
+}
+
+function assessVariables(scenario: Scenario, variables: TraceVariables, sources: BuyerSource[]): VariableAssessment {
+  const allVariables = `${variables.issueIdentified} ${variables.request} ${variables.reason} ${variables.evidence}`;
+  const evidenceProvided = hasAnyValue(variables.evidence, ["photos provided", "photo provided", "packaging kept"]);
+  const noQualityIssue = hasAnyValue(`${variables.reason} ${variables.evidence}`, [
+    "no quality issue",
+    "changed their mind",
+    "change-of-mind",
+  ]);
+  const qualityOrSafetyIssue = hasAnyValue(allVariables, [
+    "damaged",
+    "unsafe",
+    "quality",
+    "temperature",
+    "wrong item",
+    "expired",
+    "broken",
+  ]);
+  const wantsHuman = hasAnyValue(variables.request, ["human support", "ask seller"]) || hasAnyValue(scenario.nextAction, ["human support"]);
+
+  if (wantsHuman && !qualityOrSafetyIssue) {
+    const policy = sourceRef(sources, (source) => /policy|return|support/i.test(source.category + source.title), 1);
+    return {
+      answer: `I can pass this to human support for review.\n\nI checked the available policy and order information [${policy}], but this situation needs a human decision before any service request is started.`,
+      nextAction: "contact human support",
+      confidence: 72,
+      taskType: "human_review",
+      sourceTags: ["Human review", "Policy", "Order status"],
+    };
+  }
+
+  if (
+    (scenario.key === "snack_package_evidence_unclear" || scenario.key === "damaged_food_return") &&
+    evidenceProvided
+  ) {
+    const evidence = sourceRef(sources, (source) => /evidence|photo|policy|return/i.test(source.category + source.title), 1);
+    const order = sourceRef(sources, (source) => /order/i.test(source.category), 2);
+    return {
+      answer: `Yes, I can now prepare this for review.\n\nThe order record is available [${order}], and the evidence requirement is now met because photos have been provided [${evidence}]. I can prepare the refund or replacement request after you confirm.`,
+      nextAction: "start a refund request",
+      confidence: 90,
+      taskType: "refund_or_return_support",
+      sourceTags: ["Evidence checked", "Order status", "Store policy"],
+    };
+  }
+
+  if (
+    (scenario.key === "chilled_yoghurt_change_mind" || scenario.key === "fresh_sandwich_change_mind") &&
+    qualityOrSafetyIssue &&
+    !noQualityIssue
+  ) {
+    const exception = sourceRef(sources, (source) => /return|exception|food/i.test(source.category + source.title), 1);
+    const order = sourceRef(sources, (source) => /order/i.test(source.category), 2);
+    return {
+      answer: `I would not start a standard change-of-mind return, but this should be reviewed.\n\nThe order record is available [${order}], and food return exceptions allow review when there is a quality, safety, temperature, packaging, or delivery issue [${exception}]. I can send this to human support with the details you confirmed.`,
+      nextAction: "send this to human support for review",
+      confidence: 82,
+      taskType: "human_review",
+      sourceTags: ["Food exception", "Order status", "Human review"],
+    };
+  }
+
+  if (scenario.key === "missing_accessory" && evidenceProvided) {
+    const rule = sourceRef(sources, (source) => /missing|refund|support/i.test(source.category + source.title), 1);
+    const order = sourceRef(sources, (source) => /order/i.test(source.category), 2);
+    return {
+      answer: `Yes, I can prepare a support request now.\n\nThe order record shows the product should include matching parts [${order}], and the support rule allows a replacement or refund request for missing accessories when the package details are available [${rule}].`,
+      nextAction: "prepare a support request",
+      confidence: 90,
+      taskType: "missing_item_support",
+      sourceTags: ["Missing accessory", "Order status", "Store policy"],
+    };
+  }
+
+  return {
+    nextAction: scenario.nextAction,
+    taskType: taskTypeFor(scenario, variables),
   };
 }
 
@@ -766,9 +873,15 @@ async function fetchKnowledgeDocs() {
   }
 }
 
-async function generateWithLLM(question: string, scenario: Scenario, sources: BuyerSource[]) {
+async function generateWithLLM(
+  question: string,
+  scenario: Scenario,
+  sources: BuyerSource[],
+  variables: TraceVariables,
+  assessment: VariableAssessment
+) {
   const client = getOpenAIClient();
-  if (!client || scenario.key === "unknown") return null;
+  if (!client || scenario.key === "unknown" || assessment.answer) return null;
 
   const context = sources
     .map(
@@ -794,10 +907,14 @@ Content: ${source.excerpt}`
           content: `Customer question: ${question}
 
 Known task variables:
-- Issue: ${scenario.variables.issueIdentified}
-- Request: ${scenario.variables.request}
-- Reason: ${scenario.variables.reason}
-- Evidence: ${scenario.variables.evidence}
+- Issue: ${variables.issueIdentified}
+- Request: ${variables.request}
+- Reason: ${variables.reason}
+- Evidence: ${variables.evidence}
+
+Current service decision:
+- Next action: ${assessment.nextAction}
+- Task type: ${assessment.taskType || taskTypeFor(scenario, variables)}
 
 Sources:
 ${context}
@@ -808,7 +925,7 @@ Write a short answer with a bold-style first sentence but without markdown bulle
     });
 
     const answer = cleanBuyerAnswer(completion.choices[0]?.message?.content || "");
-    if (!answer || !/\[\d+\]/.test(answer) || !isSafeLLMAnswer(answer, scenario, sources)) return null;
+    if (!answer || !/\[\d+\]/.test(answer) || !isSafeLLMAnswer(answer, scenario, sources, variables)) return null;
 
     return answer;
   } catch (error) {
@@ -817,7 +934,7 @@ Write a short answer with a bold-style first sentence but without markdown bulle
   }
 }
 
-function isSafeLLMAnswer(answer: string, scenario: Scenario, sources: BuyerSource[]) {
+function isSafeLLMAnswer(answer: string, scenario: Scenario, sources: BuyerSource[], variables = scenario.variables) {
   const validCitationNumbers = new Set(sources.map((source) => source.number));
   const citationNumbers = Array.from(answer.matchAll(/\[(\d+)\]/g)).map((match) => Number(match[1]));
   if (!citationNumbers.length || citationNumbers.some((number) => !validCitationNumbers.has(number))) return false;
@@ -830,8 +947,9 @@ function isSafeLLMAnswer(answer: string, scenario: Scenario, sources: BuyerSourc
   if (scenario.key === "allergen_safety" && includesAny(lower, ["safe to eat", "you can eat"])) return false;
   if (scenario.key === "chilled_yoghurt_change_mind" && includesAny(lower, ["eligible for a return and refund", "start a standard return"])) return false;
   if (scenario.key === "fresh_sandwich_change_mind" && includesAny(lower, ["eligible for a return and refund", "start a standard return", "can return it because"])) return false;
-  if (scenario.key === "damaged_food_return" && includesAny(lower, ["you are eligible for a refund", "i can start a refund request", "i can prepare a refund request"])) return false;
-  if (scenario.key === "snack_package_evidence_unclear" && includesAny(lower, ["proceed with your refund request", "start a refund request", "eligible for a refund"])) return false;
+  const evidenceProvided = hasAnyValue(variables.evidence, ["photos provided", "photo provided", "packaging kept"]);
+  if (!evidenceProvided && scenario.key === "damaged_food_return" && includesAny(lower, ["you are eligible for a refund", "i can start a refund request", "i can prepare a refund request"])) return false;
+  if (!evidenceProvided && scenario.key === "snack_package_evidence_unclear" && includesAny(lower, ["proceed with your refund request", "start a refund request", "eligible for a refund"])) return false;
 
   return true;
 }
@@ -853,26 +971,26 @@ export async function POST(request: Request) {
       ? selectedDocs
       : demoKnowledge.slice(0, 3).map((doc, index) => ({ ...doc, score: 10 - index }));
     const sources = buildSources(docsForSources);
-    const llmAnswer = await generateWithLLM(question, scenario, sources);
-    const answer = cleanBuyerAnswer(llmAnswer || scenario.answerTemplate(sources));
+    const variables = cleanVariables(scenario, body.variables);
+    const assessment = assessVariables(scenario, variables, sources);
+    const llmAnswer = await generateWithLLM(question, scenario, sources, variables, assessment);
+    const answer = cleanBuyerAnswer(assessment.answer || llmAnswer || scenario.answerTemplate(sources));
+    const nextAction = assessment.nextAction;
 
     return Response.json({
       runId: `traceguide-${Date.now()}`,
       answer,
-      confidence: confidenceFor(scenario, sources),
+      confidence: assessment.confidence || confidenceFor(scenario, sources),
       sources,
-      sourceTags: sourceTags(scenario, sources.length ? sources : []),
-      variables: {
-        ...scenario.variables,
-        ...(body.variables || {}),
-      },
-      nextAction: scenario.nextAction,
+      sourceTags: assessment.sourceTags || sourceTags(scenario, sources.length ? sources : []),
+      variables,
+      nextAction,
       product: scenario.product,
       loadingTitle: scenario.loadingTitle,
       loadingSteps: scenario.loadingSteps,
       agentStages: agentStagesFor(scenario),
-      taskType: taskTypeFor(scenario),
-      actionPreview: actionPreviewFor(scenario),
+      taskType: assessment.taskType || taskTypeFor(scenario, variables),
+      actionPreview: actionPreviewFor(scenario, nextAction),
       systemBoundary:
         "Functional research prototype: reads the knowledge base and calls an LLM for the answer; order records and service actions are simulated for safe testing.",
       scenario: scenario.key,
