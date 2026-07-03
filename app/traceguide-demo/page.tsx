@@ -22,6 +22,7 @@ type TraceVariables = {
 };
 
 type TraceResponse = {
+  runId?: string;
   answer: string;
   confidence: number;
   sources: Source[];
@@ -40,7 +41,7 @@ type ActionResponse = {
   steps: string[];
 };
 
-type SheetMode = "sourceOverview" | "sourcesUsed" | "sourceDetails" | "variables" | null;
+type SheetMode = "sourceOverview" | "sourcesUsed" | "sourceDetails" | "variables" | "ordinaryDetails" | null;
 
 const defaultQuestion = "The glass lunch box arrived damaged. Can I return it?";
 
@@ -358,6 +359,61 @@ function productImageSrc(product: ProductContext) {
   return "/traceguide-glass-lunch-box.png";
 }
 
+function ordinaryDetailRows(product: ProductContext, variables: TraceVariables) {
+  const name = product.name.toLowerCase();
+  if (name.includes("yoghurt")) {
+    return [
+      { label: "Order status", value: "Delivered today" },
+      { label: "Product type", value: "Chilled food" },
+      { label: "Return rule", value: "Change-of-mind returns are usually excluded" },
+      { label: "Issue reported", value: variables.reason },
+    ];
+  }
+
+  if (name.includes("sandwich")) {
+    return [
+      { label: "Order status", value: "Delivered today" },
+      { label: "Product type", value: "Fresh food" },
+      { label: "Return rule", value: "Perishable food has return exceptions" },
+      { label: "Issue reported", value: variables.reason },
+    ];
+  }
+
+  if (name.includes("snack")) {
+    return [
+      { label: "Order status", value: "Delivered yesterday" },
+      { label: "Evidence", value: variables.evidence },
+      { label: "Store note", value: "Photo may be needed before review" },
+      { label: "Issue reported", value: variables.issueIdentified },
+    ];
+  }
+
+  if (name.includes("cookie")) {
+    return [
+      { label: "Order status", value: product.status },
+      { label: "Product type", value: "Packaged food" },
+      { label: "Evidence", value: variables.evidence },
+      { label: "Store note", value: "Photos help the seller review damage" },
+    ];
+  }
+
+  if (name.includes("container")) {
+    return [
+      { label: "Order status", value: product.status },
+      { label: "Product type", value: "Reusable home product" },
+      { label: "Support option", value: "Replacement or refund may be reviewed" },
+      { label: "Issue reported", value: variables.issueIdentified },
+    ];
+  }
+
+  return [
+    { label: "Order status", value: product.status },
+    { label: "Product type", value: product.detail },
+    { label: "Support option", value: variables.request },
+    { label: "Issue reported", value: variables.issueIdentified },
+  ];
+}
+
 export default function TraceGuideDemo() {
   const [participantCode, setParticipantCode] = useState("");
   const [clientSessionId, setClientSessionId] = useState("");
@@ -452,7 +508,7 @@ export default function TraceGuideDemo() {
           question: prompt,
           taskId: taskForRun?.id,
           variables: nextVariables,
-      product: {
+          product: {
             name: inferProduct(prompt).name,
             deliveryStatus: inferProduct(prompt).status,
           },
@@ -498,6 +554,7 @@ export default function TraceGuideDemo() {
       loadingSteps: result.loadingSteps?.length ? result.loadingSteps : inferLoadingSteps(question),
       scenario: result.scenario,
       usedLLM: result.usedLLM,
+      runId: result.runId,
     };
   }
 
@@ -644,7 +701,16 @@ export default function TraceGuideDemo() {
           ) : (
             <>
               <UserQuestion question={question || defaultQuestion} />
-              <ProductCard product={activeProduct} />
+              <ProductCard
+                product={activeProduct}
+                onOpenDetails={() => {
+                  setSheetMode("ordinaryDetails");
+                  logStudyEvent("ordinary_details_opened", {
+                    product: activeProduct.name,
+                    linkLabel: activeProduct.linkLabel,
+                  });
+                }}
+              />
             </>
           )}
 
@@ -794,6 +860,13 @@ export default function TraceGuideDemo() {
                 onSave={saveAndRecheck}
               />
             )}
+            {sheetMode === "ordinaryDetails" && (
+              <OrdinaryDetailsSheet
+                product={activeProduct}
+                variables={variables}
+                onDone={() => setSheetMode(null)}
+              />
+            )}
           </section>
         </div>
       )}
@@ -850,7 +923,13 @@ function WelcomeCard({
   );
 }
 
-function ProductCard({ product }: { product: ProductContext }) {
+function ProductCard({
+  product,
+  onOpenDetails,
+}: {
+  product: ProductContext;
+  onOpenDetails: () => void;
+}) {
   return (
     <article className={styles.productCard}>
       <Image
@@ -865,12 +944,65 @@ function ProductCard({ product }: { product: ProductContext }) {
         <p>
           <span>✓</span> {product.status}
         </p>
-        <button type="button">{product.linkLabel}</button>
+        <button type="button" onClick={onOpenDetails}>
+          {product.linkLabel}
+        </button>
       </div>
       <span className={styles.chevron} aria-hidden="true">
         ›
       </span>
     </article>
+  );
+}
+
+function OrdinaryDetailsSheet({
+  product,
+  variables,
+  onDone,
+}: {
+  product: ProductContext;
+  variables: TraceVariables;
+  onDone: () => void;
+}) {
+  const rows = ordinaryDetailRows(product, variables);
+
+  return (
+    <>
+      <div className={styles.ordinaryDetailHeader}>
+        <div>
+          <h2>{product.linkLabel}</h2>
+          <p>Standard product and order information available before the agent prepares a request.</p>
+        </div>
+        <button className={styles.donePill} type="button" onClick={onDone}>
+          Done
+        </button>
+      </div>
+
+      <article className={styles.ordinaryDetailCard}>
+        <h3>{product.name}</h3>
+        <p>{product.detail}</p>
+        <div className={styles.ordinaryDetailRows}>
+          {rows.map((row) => (
+            <div key={row.label}>
+              <span>{row.label}</span>
+              <strong>{row.value}</strong>
+            </div>
+          ))}
+        </div>
+      </article>
+
+      <article className={styles.detailNote}>
+        <strong>TraceGuide condition</strong>
+        <p>
+          These ordinary details remain available, while the answer also exposes source anchors,
+          checked variables and confirmation before any simulated service request.
+        </p>
+      </article>
+
+      <button className={styles.fullWidthPrimary} type="button" onClick={onDone}>
+        Done
+      </button>
+    </>
   );
 }
 

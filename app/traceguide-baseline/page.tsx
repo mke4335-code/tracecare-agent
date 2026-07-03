@@ -197,6 +197,7 @@ export default function TraceGuideBaseline() {
   const [variables, setVariables] = useState<TraceVariables>(defaultVariables);
   const [action, setAction] = useState<ActionResponse | null>(null);
   const [actionStep, setActionStep] = useState(0);
+  const [showOrdinaryDetails, setShowOrdinaryDetails] = useState(false);
 
   const actionSteps = useMemo(
     () =>
@@ -377,7 +378,16 @@ export default function TraceGuideBaseline() {
           ) : (
             <>
               <UserQuestion question={question} />
-              <ProductCard product={product} />
+              <ProductCard
+                product={product}
+                onOpenDetails={() => {
+                  setShowOrdinaryDetails(true);
+                  logStudyEvent("ordinary_details_opened", {
+                    product: product.name,
+                    linkLabel: product.linkLabel,
+                  });
+                }}
+              />
             </>
           )}
 
@@ -468,6 +478,19 @@ export default function TraceGuideBaseline() {
 
         <div className={styles.homeIndicator} />
       </section>
+
+      {showOrdinaryDetails && (
+        <div className={styles.sheetBackdrop} onClick={() => setShowOrdinaryDetails(false)}>
+          <section className={styles.sheet} onClick={(event) => event.stopPropagation()}>
+            <div className={styles.handle} />
+            <OrdinaryDetailsSheet
+              product={product}
+              variables={variables}
+              onDone={() => setShowOrdinaryDetails(false)}
+            />
+          </section>
+        </div>
+      )}
     </main>
   );
 }
@@ -494,7 +517,13 @@ function UserQuestion({ question }: { question: string }) {
   );
 }
 
-function ProductCard({ product }: { product: ProductContext }) {
+function ProductCard({
+  product,
+  onOpenDetails,
+}: {
+  product: ProductContext;
+  onOpenDetails: () => void;
+}) {
   return (
     <article className={styles.productCard}>
       <Image src={productImageSrc(product)} alt={product.name} width={320} height={320} priority />
@@ -503,13 +532,121 @@ function ProductCard({ product }: { product: ProductContext }) {
         <p>
           <span>✓</span> {product.status}
         </p>
-        <button type="button">{product.linkLabel}</button>
+        <button type="button" onClick={onOpenDetails}>
+          {product.linkLabel}
+        </button>
       </div>
       <span className={styles.chevron} aria-hidden="true">
         ›
       </span>
     </article>
   );
+}
+
+function OrdinaryDetailsSheet({
+  product,
+  variables,
+  onDone,
+}: {
+  product: ProductContext;
+  variables: TraceVariables;
+  onDone: () => void;
+}) {
+  const rows = ordinaryDetailRows(product, variables);
+
+  return (
+    <>
+      <div className={styles.ordinaryDetailHeader}>
+        <div>
+          <h2>{product.linkLabel}</h2>
+          <p>Standard product and order information available in a normal shopping app.</p>
+        </div>
+        <button className={styles.donePill} type="button" onClick={onDone}>
+          Done
+        </button>
+      </div>
+
+      <article className={styles.ordinaryDetailCard}>
+        <h3>{product.name}</h3>
+        <p>{product.detail}</p>
+        <div className={styles.ordinaryDetailRows}>
+          {rows.map((row) => (
+            <div key={row.label}>
+              <span>{row.label}</span>
+              <strong>{row.value}</strong>
+            </div>
+          ))}
+        </div>
+      </article>
+
+      <article className={styles.detailNote}>
+        <strong>Baseline condition</strong>
+        <p>
+          You can check these ordinary details yourself, but the AI answer does not expose source
+          anchors or editable decision variables.
+        </p>
+      </article>
+
+      <button className={styles.fullWidthPrimary} type="button" onClick={onDone}>
+        Done
+      </button>
+    </>
+  );
+}
+
+function ordinaryDetailRows(product: ProductContext, variables: TraceVariables) {
+  const name = product.name.toLowerCase();
+  if (name.includes("yoghurt")) {
+    return [
+      { label: "Order status", value: "Delivered today" },
+      { label: "Product type", value: "Chilled food" },
+      { label: "Return rule", value: "Change-of-mind returns are usually excluded" },
+      { label: "Issue reported", value: variables.reason },
+    ];
+  }
+
+  if (name.includes("sandwich")) {
+    return [
+      { label: "Order status", value: "Delivered today" },
+      { label: "Product type", value: "Fresh food" },
+      { label: "Return rule", value: "Perishable food has return exceptions" },
+      { label: "Issue reported", value: variables.reason },
+    ];
+  }
+
+  if (name.includes("snack")) {
+    return [
+      { label: "Order status", value: "Delivered yesterday" },
+      { label: "Evidence", value: variables.evidence },
+      { label: "Store note", value: "Photo may be needed before review" },
+      { label: "Issue reported", value: variables.issueIdentified },
+    ];
+  }
+
+  if (name.includes("cookie")) {
+    return [
+      { label: "Order status", value: product.status },
+      { label: "Product type", value: "Packaged food" },
+      { label: "Evidence", value: variables.evidence },
+      { label: "Store note", value: "Photos help the seller review damage" },
+    ];
+  }
+
+  if (name.includes("container")) {
+    return [
+      { label: "Order status", value: product.status },
+      { label: "Product type", value: "Reusable home product" },
+      { label: "Support option", value: "Replacement or refund may be reviewed" },
+      { label: "Issue reported", value: variables.issueIdentified },
+    ];
+  }
+
+  return [
+    { label: "Order status", value: product.status },
+    { label: "Product type", value: product.detail },
+    { label: "Support option", value: variables.request },
+    { label: "Issue reported", value: variables.issueIdentified },
+  ];
 }
 
 function AssistantRow({

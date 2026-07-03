@@ -704,6 +704,36 @@ function cleanBuyerAnswer(answer: string) {
   return [firstWithCitation, ...restParts].join("\n\n");
 }
 
+function agentStagesFor(scenario: Scenario) {
+  return scenario.loadingSteps.map((label, index) => ({
+    label,
+    status: "completed",
+    visibleToBuyer: true,
+    order: index + 1,
+  }));
+}
+
+function taskTypeFor(scenario: Scenario) {
+  if (scenario.key.includes("change_mind")) return "boundary_exception_review";
+  if (scenario.key.includes("evidence") || scenario.variables.evidence.toLowerCase().includes("photo")) {
+    return "evidence_required_review";
+  }
+  if (scenario.key.includes("compensation")) return "delivery_compensation";
+  if (scenario.key.includes("allergen")) return "product_safety_advice";
+  if (scenario.key.includes("missing")) return "missing_item_support";
+  return "refund_or_return_support";
+}
+
+function actionPreviewFor(scenario: Scenario) {
+  return {
+    label: scenario.nextAction,
+    requiresUserConfirmation: true,
+    simulatedAction: true,
+    description:
+      "The prototype can prepare a service request for review, but it does not process real payments, refunds, returns or order changes.",
+  };
+}
+
 async function fetchKnowledgeDocs() {
   try {
     const query = supabase
@@ -827,6 +857,7 @@ export async function POST(request: Request) {
     const answer = cleanBuyerAnswer(llmAnswer || scenario.answerTemplate(sources));
 
     return Response.json({
+      runId: `traceguide-${Date.now()}`,
       answer,
       confidence: confidenceFor(scenario, sources),
       sources,
@@ -839,6 +870,11 @@ export async function POST(request: Request) {
       product: scenario.product,
       loadingTitle: scenario.loadingTitle,
       loadingSteps: scenario.loadingSteps,
+      agentStages: agentStagesFor(scenario),
+      taskType: taskTypeFor(scenario),
+      actionPreview: actionPreviewFor(scenario),
+      systemBoundary:
+        "Functional research prototype: reads the knowledge base and calls an LLM for the answer; order records and service actions are simulated for safe testing.",
       scenario: scenario.key,
       usedLLM: Boolean(llmAnswer),
     });
@@ -848,6 +884,7 @@ export async function POST(request: Request) {
     const sources = buildSources(demoKnowledge.slice(0, 3).map((doc, index) => ({ ...doc, score: 10 - index })));
 
     return Response.json({
+      runId: `traceguide-fallback-${Date.now()}`,
       answer: scenario.answerTemplate(sources),
       confidence: 72,
       sources,
@@ -857,6 +894,11 @@ export async function POST(request: Request) {
       product: scenario.product,
       loadingTitle: scenario.loadingTitle,
       loadingSteps: scenario.loadingSteps,
+      agentStages: agentStagesFor(scenario),
+      taskType: taskTypeFor(scenario),
+      actionPreview: actionPreviewFor(scenario),
+      systemBoundary:
+        "Functional research prototype fallback: uses built-in demo knowledge when live retrieval or LLM generation is unavailable.",
       scenario: scenario.key,
       usedLLM: false,
     });

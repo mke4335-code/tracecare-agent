@@ -1009,6 +1009,111 @@
   background: #ffffff;
 }
 
+.ordinaryDetailHeader {
+  display: grid;
+  grid-template-columns: 1fr 72px;
+  gap: 14px;
+  align-items: start;
+  margin: 2px 5px 20px;
+}
+
+.ordinaryDetailHeader h2 {
+  margin: 0 0 8px;
+  color: #070813;
+  font-size: 25px;
+  font-weight: 850;
+  letter-spacing: -0.06em;
+}
+
+.ordinaryDetailHeader p {
+  margin: 0;
+  color: #6d748a;
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 560;
+}
+
+.ordinaryDetailCard {
+  padding: 18px 17px;
+  border-radius: 16px;
+  border: 1px solid #e5e8f2;
+  background: #ffffff;
+}
+
+.ordinaryDetailCard h3 {
+  margin: 0 0 5px;
+  color: #070813;
+  font-size: 18px;
+  font-weight: 820;
+  letter-spacing: -0.04em;
+}
+
+.ordinaryDetailCard > p {
+  margin: 0 0 15px;
+  color: #6d748a;
+  font-size: 13px;
+  font-weight: 560;
+}
+
+.ordinaryDetailRows {
+  display: grid;
+  gap: 0;
+  border: 1px solid #edf0f7;
+  border-radius: 13px;
+  overflow: hidden;
+}
+
+.ordinaryDetailRows div {
+  display: grid;
+  grid-template-columns: 118px 1fr;
+  gap: 12px;
+  padding: 12px 13px;
+  border-bottom: 1px solid #edf0f7;
+  background: #ffffff;
+}
+
+.ordinaryDetailRows div:last-child {
+  border-bottom: 0;
+}
+
+.ordinaryDetailRows span {
+  color: #7a8298;
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.ordinaryDetailRows strong {
+  color: #1d2133;
+  font-size: 12.5px;
+  line-height: 1.35;
+  font-weight: 680;
+  text-align: right;
+}
+
+.detailNote {
+  margin-top: 14px;
+  padding: 13px 14px;
+  border: 1px solid #eceefa;
+  border-radius: 13px;
+  background: #f8f9ff;
+}
+
+.detailNote strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #222638;
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.detailNote p {
+  margin: 0;
+  color: #747c92;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 540;
+}
+
 .sourceList small,
 .detailCard small {
   display: block;
