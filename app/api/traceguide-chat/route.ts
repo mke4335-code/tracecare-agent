@@ -1,5 +1,13 @@
 import OpenAI from "openai";
 import { supabase } from "../../../lib/supabase";
+import {
+  commerceContextFromDatabaseRows,
+  commerceContextToKnowledgeDocs,
+  getCommerceContext,
+  type CommerceContext,
+  type CommerceDatabaseRows,
+  type TraceVariables,
+} from "../../../lib/traceguide-commerce-data";
 
 type KnowledgeDoc = {
   id: string;
@@ -11,13 +19,6 @@ type KnowledgeDoc = {
 
 type RankedDoc = KnowledgeDoc & {
   score: number;
-};
-
-type TraceVariables = {
-  issueIdentified: string;
-  request: string;
-  reason: string;
-  evidence: string;
 };
 
 type ProductContext = {
@@ -58,6 +59,7 @@ type BuyerSource = {
   title: string;
   category: string;
   excerpt: string;
+  matchScore: number;
   relevance: "High relevance" | "Medium relevance" | "Relevant";
   matchedAnswer?: string;
 };
@@ -65,7 +67,6 @@ type BuyerSource = {
 type VariableAssessment = {
   answer?: string;
   nextAction: string;
-  confidence?: number;
   taskType?: string;
   sourceTags?: string[];
 };
@@ -604,9 +605,15 @@ function detectScenario(question: string, taskId?: string): Scenario {
   return unknownScenario;
 }
 
-function scoreDoc(question: string, doc: KnowledgeDoc, scenario: Scenario): number {
+function scoreDoc(question: string, doc: KnowledgeDoc, scenario: Scenario, variables = scenario.variables): number {
   const text = `${doc.title} ${doc.category} ${doc.content}`.toLowerCase();
-  const terms = Array.from(new Set(normaliseWords(`${question} ${scenario.variables.issueIdentified} ${scenario.variables.reason}`)));
+  const terms = Array.from(
+    new Set(
+      normaliseWords(
+        `${question} ${variables.issueIdentified} ${variables.request} ${variables.reason} ${variables.evidence}`
+      )
+    )
+  );
   let score = terms.reduce((total, term) => total + (text.includes(term) ? 1 : 0), 0);
 
   scenario.sourceMatchers.forEach((matcher, index) => {
@@ -627,13 +634,13 @@ function mergeKnowledge(remoteDocs: KnowledgeDoc[]) {
   return Array.from(byKey.values());
 }
 
-function pickScenarioDocs(docs: KnowledgeDoc[], scenario: Scenario, question: string) {
+function pickScenarioDocs(docs: KnowledgeDoc[], scenario: Scenario, question: string, variables = scenario.variables) {
   const selected: RankedDoc[] = [];
 
   for (const matcher of scenario.sourceMatchers) {
     const match = docs
       .filter((doc) => !selected.some((item) => item.id === doc.id))
-      .map((doc) => ({ ...doc, score: scoreDoc(question, doc, scenario) }))
+      .map((doc) => ({ ...doc, score: scoreDoc(question, doc, scenario, variables) }))
       .sort((a, b) => b.score - a.score)
       .find((doc) => matcher(doc));
 
@@ -642,7 +649,7 @@ function pickScenarioDocs(docs: KnowledgeDoc[], scenario: Scenario, question: st
 
   const ranked = docs
     .filter((doc) => !selected.some((item) => item.id === doc.id))
-    .map((doc) => ({ ...doc, score: scoreDoc(question, doc, scenario) }))
+    .map((doc) => ({ ...doc, score: scoreDoc(question, doc, scenario, variables) }))
     .sort((a, b) => b.score - a.score)
     .filter((doc) => doc.score > 0);
 
@@ -656,6 +663,7 @@ function buildSources(docs: RankedDoc[]) {
     title: doc.title.replace(/^Order status — /, ""),
     category: doc.category,
     excerpt: doc.content,
+    matchScore: doc.score,
     relevance: index < 2 ? ("High relevance" as const) : ("Medium relevance" as const),
     matchedAnswer:
       index === 0
@@ -685,11 +693,101 @@ function sourceTags(scenario: Scenario, sources: BuyerSource[]) {
   return Array.from(new Set(tags)).slice(0, 3);
 }
 
-function confidenceFor(scenario: Scenario, sources: BuyerSource[]) {
-  if (scenario.key === "unknown") return 58;
-  if (sources.length >= 3) return 88;
-  if (sources.length === 2) return 80;
-  return 66;
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function variableCompleteness(variables: TraceVariables) {
+  const values = [
+    variables.issueIdentified,
+    variables.request,
+    variables.reason,
+    variables.evidence,
+  ];
+  const knownValues = values.filter((value) => {
+    const normalised = value.toLowerCase();
+    return (
+      value.trim() &&
+      !normalised.includes("not provided") &&
+      !normalised.includes("not sure") &&
+      !normalised.includes("not added") &&
+      !normalised.includes("needed") &&
+      !normalised.includes("unclear")
+    );
+  });
+
+  return knownValues.length / values.length;
+}
+
+function confidenceFor(
+  scenario: Scenario,
+  sources: BuyerSource[],
+  variables: TraceVariables,
+  assessment: VariableAssessment,
+  usedLLM: boolean
+) {
+  const sourceStrength = sources.length
+    ? sources.reduce((total, source) => total + clamp(source.matchScore / 30, 0, 1), 0) / sources.length
+    : 0;
+  const hasPolicyLikeSource = sources.some((source) =>
+    /policy|refund|return|exception|logistics|safety|evidence/i.test(`${source.category} ${source.title}`)
+  );
+  const hasOrderOrProductSource = sources.some((source) =>
+    /order|product|ingredient|status/i.test(`${source.category} ${source.title}`)
+  );
+  const hasSupportingSource = sources.length >= 3;
+  const coverageScore =
+    (hasPolicyLikeSource ? 0.42 : 0) +
+    (hasOrderOrProductSource ? 0.38 : 0) +
+    (hasSupportingSource ? 0.2 : 0);
+  const variableScore = variableCompleteness(variables);
+  const guardedGenerationScore = usedLLM ? 1 : 0.86;
+  const requiresHumanReview =
+    /human_review|boundary_exception/.test(assessment.taskType || "") ||
+    /human support|review/i.test(assessment.nextAction);
+  const needsEvidence = /evidence_required/.test(assessment.taskType || "");
+
+  let score =
+    42 +
+    sourceStrength * 26 +
+    coverageScore * 18 +
+    variableScore * 10 +
+    guardedGenerationScore * 4 +
+    (requiresHumanReview || needsEvidence ? 1 : 3);
+
+  const caps: string[] = [];
+  if (scenario.key === "unknown") {
+    score = Math.min(score, 64);
+    caps.push("unknown task");
+  }
+
+  if (needsEvidence) {
+    score = Math.min(score, 76);
+    caps.push("evidence is still missing");
+  }
+
+  if (requiresHumanReview) {
+    score = Math.min(score, 82);
+    caps.push("human review is recommended");
+  }
+
+  const roundedScore = Math.round(clamp(score, 48, 96));
+  const coverageLabels = [
+    hasPolicyLikeSource ? "policy/source evidence" : null,
+    hasOrderOrProductSource ? "order or product record" : null,
+    hasSupportingSource ? "supporting store guidance" : null,
+  ].filter(Boolean);
+
+  return {
+    score: roundedScore,
+    reason: [
+      `Calculated from ${sources.length} matched source${sources.length === 1 ? "" : "s"}`,
+      coverageLabels.length ? `covering ${coverageLabels.join(", ")}` : "with limited source coverage",
+      `and ${Math.round(variableScore * 100)}% completed task details`,
+      usedLLM ? "with the generated answer passing safety checks" : "using the grounded fallback answer",
+      caps.length ? `capped because ${caps.join(" and ")}` : "no execution blocker detected",
+    ].join("; "),
+  };
 }
 
 function cleanBuyerAnswer(answer: string) {
@@ -722,8 +820,15 @@ function agentStagesFor(scenario: Scenario) {
 }
 
 function taskTypeFor(scenario: Scenario, variables = scenario.variables) {
+  const evidence = variables.evidence.toLowerCase();
+  const evidenceMissing =
+    evidence.includes("not added") ||
+    evidence.includes("unclear") ||
+    evidence.includes("not sure") ||
+    evidence.includes("needed");
+
   if (scenario.key.includes("change_mind")) return "boundary_exception_review";
-  if (scenario.key.includes("evidence") || variables.evidence.toLowerCase().includes("photo")) {
+  if ((scenario.key.includes("evidence") || scenario.key === "damaged_food_return") && evidenceMissing) {
     return "evidence_required_review";
   }
   if (scenario.key.includes("compensation")) return "delivery_compensation";
@@ -742,8 +847,8 @@ function actionPreviewFor(scenario: Scenario, nextAction = scenario.nextAction) 
   };
 }
 
-function cleanVariables(scenario: Scenario, bodyVariables: unknown): TraceVariables {
-  if (!bodyVariables || typeof bodyVariables !== "object") return scenario.variables;
+function cleanVariables(scenario: Scenario, bodyVariables: unknown): TraceVariables | undefined {
+  if (!bodyVariables || typeof bodyVariables !== "object") return undefined;
   const incoming = bodyVariables as Partial<TraceVariables>;
 
   return {
@@ -786,7 +891,6 @@ function assessVariables(scenario: Scenario, variables: TraceVariables, sources:
     return {
       answer: `I can pass this to human support for review.\n\nI checked the available policy and order information [${policy}], but this situation needs a human decision before any service request is started.`,
       nextAction: "contact human support",
-      confidence: 72,
       taskType: "human_review",
       sourceTags: ["Human review", "Policy", "Order status"],
     };
@@ -801,7 +905,6 @@ function assessVariables(scenario: Scenario, variables: TraceVariables, sources:
     return {
       answer: `Yes, I can now prepare this for review.\n\nThe order record is available [${order}], and the evidence requirement is now met because photos have been provided [${evidence}]. I can prepare the refund or replacement request after you confirm.`,
       nextAction: "start a refund request",
-      confidence: 90,
       taskType: "refund_or_return_support",
       sourceTags: ["Evidence checked", "Order status", "Store policy"],
     };
@@ -817,7 +920,6 @@ function assessVariables(scenario: Scenario, variables: TraceVariables, sources:
     return {
       answer: `I would not start a standard change-of-mind return, but this should be reviewed.\n\nThe order record is available [${order}], and food return exceptions allow review when there is a quality, safety, temperature, packaging, or delivery issue [${exception}]. I can send this to human support with the details you confirmed.`,
       nextAction: "send this to human support for review",
-      confidence: 82,
       taskType: "human_review",
       sourceTags: ["Food exception", "Order status", "Human review"],
     };
@@ -829,7 +931,6 @@ function assessVariables(scenario: Scenario, variables: TraceVariables, sources:
     return {
       answer: `Yes, I can prepare a support request now.\n\nThe order record shows the product should include matching parts [${order}], and the support rule allows a replacement or refund request for missing accessories when the package details are available [${rule}].`,
       nextAction: "prepare a support request",
-      confidence: 90,
       taskType: "missing_item_support",
       sourceTags: ["Missing accessory", "Order status", "Store policy"],
     };
@@ -870,6 +971,102 @@ async function fetchKnowledgeDocs() {
   } catch (error) {
     console.error("TraceGuide Supabase connection error:", error);
     return [];
+  }
+}
+
+async function fetchCommerceContextFromSupabase(
+  scenario: Scenario,
+  taskId: string | undefined,
+  editedVariables?: TraceVariables
+): Promise<CommerceContext | null> {
+  try {
+    let taskQuery = supabase.from("traceguide_experiment_tasks").select("*");
+    taskQuery = taskId
+      ? taskQuery.eq("id", taskId)
+      : taskQuery.eq("scenario_key", scenario.key);
+
+    const taskResult = await taskQuery.limit(1).maybeSingle();
+    if (taskResult.error || !taskResult.data) return null;
+
+    const task = taskResult.data as CommerceDatabaseRows["task"];
+    const [customerResult, orderResult] = await Promise.all([
+      supabase.from("traceguide_customers").select("*").eq("id", task.customer_id).maybeSingle(),
+      supabase.from("traceguide_orders").select("*").eq("id", task.order_id).maybeSingle(),
+    ]);
+
+    if (customerResult.error || orderResult.error || !customerResult.data || !orderResult.data) return null;
+
+    const order = orderResult.data as CommerceDatabaseRows["order"];
+    const [productResult, evidenceResult] = await Promise.all([
+      supabase.from("traceguide_products").select("*").eq("id", order.product_id).maybeSingle(),
+      supabase
+        .from("traceguide_evidence_records")
+        .select("*")
+        .eq("order_id", order.id)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    if (productResult.error || evidenceResult.error || !productResult.data || !evidenceResult.data) return null;
+
+    return commerceContextFromDatabaseRows(
+      {
+        task,
+        customer: customerResult.data as CommerceDatabaseRows["customer"],
+        product: productResult.data as CommerceDatabaseRows["product"],
+        order,
+        evidence: evidenceResult.data as CommerceDatabaseRows["evidence"],
+      },
+      editedVariables
+    );
+  } catch (error) {
+    console.warn("TraceGuide commerce DB context unavailable; using server fixture.", error);
+    return null;
+  }
+}
+
+async function logAgentRun({
+  participantCode,
+  condition,
+  taskId,
+  question,
+  scenarioKey,
+  variables,
+  sources,
+  confidence,
+  confidenceReason,
+  answer,
+  nextAction,
+}: {
+  participantCode?: string;
+  condition?: string;
+  taskId?: string;
+  question: string;
+  scenarioKey: string;
+  variables: TraceVariables;
+  sources: BuyerSource[];
+  confidence: number;
+  confidenceReason: string;
+  answer: string;
+  nextAction: string;
+}) {
+  try {
+    await supabase.from("traceguide_agent_runs").insert({
+      participant_code: participantCode || null,
+      condition: condition || null,
+      task_id: taskId || null,
+      question,
+      detected_scenario: scenarioKey,
+      variables,
+      sources,
+      confidence,
+      confidence_reason: confidenceReason,
+      answer,
+      next_action: nextAction,
+    });
+  } catch (error) {
+    console.warn("TraceGuide agent run log skipped.", error);
   }
 }
 
@@ -964,28 +1161,57 @@ export async function POST(request: Request) {
     }
 
     const scenario = detectScenario(question, typeof body.taskId === "string" ? body.taskId : undefined);
+    const incomingVariables = cleanVariables(scenario, body.variables);
+    const taskId = typeof body.taskId === "string" ? body.taskId : undefined;
+    const commerceContext =
+      (await fetchCommerceContextFromSupabase(scenario, taskId, incomingVariables)) ||
+      getCommerceContext(scenario.key, taskId, incomingVariables);
+    const variables = commerceContext.variables;
+    const contextDocs = commerceContextToKnowledgeDocs(commerceContext);
     const remoteDocs = await fetchKnowledgeDocs();
-    const knowledgeDocs = mergeKnowledge(remoteDocs);
-    const selectedDocs = pickScenarioDocs(knowledgeDocs, scenario, question);
+    const knowledgeDocs = mergeKnowledge([...remoteDocs, ...contextDocs]);
+    const selectedDocs = pickScenarioDocs(knowledgeDocs, scenario, question, variables);
     const docsForSources = selectedDocs.length
       ? selectedDocs
       : demoKnowledge.slice(0, 3).map((doc, index) => ({ ...doc, score: 10 - index }));
     const sources = buildSources(docsForSources);
-    const variables = cleanVariables(scenario, body.variables);
     const assessment = assessVariables(scenario, variables, sources);
     const llmAnswer = await generateWithLLM(question, scenario, sources, variables, assessment);
     const answer = cleanBuyerAnswer(assessment.answer || llmAnswer || scenario.answerTemplate(sources));
     const nextAction = assessment.nextAction;
+    const confidence = confidenceFor(scenario, sources, variables, assessment, Boolean(llmAnswer));
+    await logAgentRun({
+      participantCode: typeof body.participantCode === "string" ? body.participantCode : undefined,
+      condition: typeof body.condition === "string" ? body.condition : undefined,
+      taskId,
+      question,
+      scenarioKey: scenario.key,
+      variables,
+      sources,
+      confidence: confidence.score,
+      confidenceReason: confidence.reason,
+      answer,
+      nextAction,
+    });
 
     return Response.json({
       runId: `traceguide-${Date.now()}`,
       answer,
-      confidence: assessment.confidence || confidenceFor(scenario, sources),
+      confidence: confidence.score,
+      confidenceReason: confidence.reason,
       sources,
       sourceTags: assessment.sourceTags || sourceTags(scenario, sources.length ? sources : []),
       variables,
       nextAction,
-      product: scenario.product,
+      product: commerceContext.productContext,
+      commerceContext: {
+        customerId: commerceContext.customer.id,
+        orderId: commerceContext.order.id,
+        productId: commerceContext.product.id,
+        evidenceId: commerceContext.evidence.id,
+        evidenceStatus: commerceContext.evidence.status,
+        correctDecision: commerceContext.task.correctDecision,
+      },
       loadingTitle: scenario.loadingTitle,
       loadingSteps: scenario.loadingSteps,
       agentStages: agentStagesFor(scenario),

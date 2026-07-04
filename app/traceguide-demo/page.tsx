@@ -10,6 +10,7 @@ type Source = {
   title: string;
   category: string;
   excerpt: string;
+  matchScore?: number;
   relevance: "High relevance" | "Medium relevance" | "Relevant";
   matchedAnswer?: string;
 };
@@ -25,6 +26,7 @@ type TraceResponse = {
   runId?: string;
   answer: string;
   confidence: number;
+  confidenceReason?: string;
   sources: Source[];
   sourceTags: string[];
   variables: TraceVariables;
@@ -545,6 +547,7 @@ export default function TraceGuideDemo() {
     return {
       answer: result.answer || fallbackResponse.answer,
       confidence: typeof result.confidence === "number" ? result.confidence : 88,
+      confidenceReason: result.confidenceReason,
       sources: result.sources?.length ? result.sources : fallbackResponse.sources,
       sourceTags: result.sourceTags?.length ? result.sourceTags : fallbackResponse.sourceTags,
       variables: result.variables || fallbackResponse.variables,
@@ -735,7 +738,9 @@ export default function TraceGuideDemo() {
                 <article className={styles.answerCard}>
                   <div className={styles.answerHeader}>
                     <strong>{activeResponse.answer.split("\n\n")[0]}</strong>
-                    <span className={styles.confidence}>{activeResponse.confidence}%</span>
+                    <span className={styles.confidence} title={activeResponse.confidenceReason || "Calculated from matched sources and checked details"}>
+                      {activeResponse.confidence}%
+                    </span>
                   </div>
                   <p>{renderAnswer(activeResponse.answer.split("\n\n").slice(1).join("\n\n"), activeResponse.sources)}</p>
                   <div className={styles.sourceTags} aria-label="Sources used for this answer">
@@ -765,7 +770,7 @@ export default function TraceGuideDemo() {
                       }}
                     >
                       <span aria-hidden="true">☷</span>
-                      Edit key variables
+                      View AI understanding
                     </button>
                   </div>
                 </article>
@@ -1086,7 +1091,7 @@ function SourceOverview({
         <div>
           <h3>{source.title}</h3>
           <p>{shortExcerpt(source.excerpt, 150)}</p>
-          <em>{source.relevance}</em>
+          <em>{source.number <= 2 ? "Used in answer" : "Supporting source"}</em>
         </div>
       </article>
       <div className={styles.sheetActions}>
@@ -1115,7 +1120,7 @@ function SourcesUsed({ sources, onDone }: { sources: Source[]; onDone: () => voi
             <h3>{source.title}</h3>
             <p>{shortExcerpt(source.excerpt, 125)}</p>
             <em className={source.relevance === "Medium relevance" ? styles.mediumTag : ""}>
-              {source.relevance}
+              {source.number <= 2 ? "Used in answer" : "Supporting source"}
             </em>
           </article>
         ))}
@@ -1163,8 +1168,8 @@ function VariablesSheet({
   return (
     <>
       <div className={styles.simpleSheetHeader}>
-        <h2>Check AI understanding</h2>
-        <p>AI understood your request as follows.</p>
+        <h2>View AI understanding</h2>
+        <p>Check what the agent understood before it prepares a request. You can correct anything that looks wrong.</p>
       </div>
       <div className={styles.variableList}>
         <SelectField
