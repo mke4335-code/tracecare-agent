@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import styles from "./traceguide-demo.module.css";
 
@@ -478,7 +478,9 @@ export default function TraceGuideDemo() {
   const [userApproved, setUserApproved] = useState(false);
   const [action, setAction] = useState<ActionResponse | null>(null);
   const [actionStep, setActionStep] = useState(0);
+  const [actionReply, setActionReply] = useState("Yes, please");
   const [previewProduct, setPreviewProduct] = useState<ProductContext>(defaultProduct);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const activeResponse = response || fallbackResponse;
   const primarySource = selectedSource || activeResponse.sources[0];
@@ -657,12 +659,13 @@ export default function TraceGuideDemo() {
     await runAssessment(question, variables, "rechecking");
   }
 
-  async function startRefundRequest() {
+  async function startRefundRequest(nextActionOverride = activeResponse.nextAction, replyLabel = "Yes, please") {
     setUserApproved(true);
+    setActionReply(replyLabel);
     setPhase("action");
     setActionStep(0);
     logStudyEvent("yes_clicked", {
-      nextAction: activeResponse.nextAction,
+      nextAction: nextActionOverride,
       variables,
       product: activeProduct.name,
     });
@@ -675,7 +678,7 @@ export default function TraceGuideDemo() {
           action: "agent_request",
           // The action is simulated, but it uses the current detected product and variables.
           product: activeProduct.name,
-          nextAction: activeResponse.nextAction,
+          nextAction: nextActionOverride,
           variables,
           sources: activeResponse.sources.map((source) => source.title),
         }),
@@ -714,6 +717,7 @@ export default function TraceGuideDemo() {
     setQuestion(trimmed);
     setInputValue("");
     setUserApproved(false);
+    setActionReply("Yes, please");
     setAction(null);
     setActiveTask(null);
     void runAssessment(trimmed, inferVariables(trimmed), "loading", null);
@@ -786,9 +790,6 @@ export default function TraceGuideDemo() {
                 <article className={styles.answerCard}>
                   <div className={styles.answerHeader}>
                     <strong>{activeResponse.answer.split("\n\n")[0]}</strong>
-                    <span className={styles.confidence} title={activeResponse.confidenceReason || "Calculated from matched sources and checked details"}>
-                      {activeResponse.confidence}%
-                    </span>
                   </div>
                   <p>{renderAnswer(activeResponse.answer.split("\n\n").slice(1).join("\n\n"), activeResponse.sources)}</p>
                   <div className={styles.sourceTags} aria-label="Sources used for this answer">
@@ -807,7 +808,6 @@ export default function TraceGuideDemo() {
                         });
                       }}
                     >
-                      <span aria-hidden="true">▤</span>
                       View sources
                     </button>
                     <button
@@ -817,7 +817,6 @@ export default function TraceGuideDemo() {
                         logStudyEvent("edit_key_variables_clicked", { variables });
                       }}
                     >
-                      <span aria-hidden="true">☷</span>
                       View AI understanding
                     </button>
                   </div>
@@ -839,7 +838,7 @@ export default function TraceGuideDemo() {
                               type="button"
                               onClick={
                                 actionState.canStartRequest
-                                  ? startRefundRequest
+                                  ? () => startRefundRequest()
                                   : () => {
                                       logStudyEvent("action_primary_clicked", {
                                         actionState: actionState.kind,
@@ -848,6 +847,8 @@ export default function TraceGuideDemo() {
 
                                       if (actionState.kind === "needs_evidence") {
                                         setSheetMode("variables");
+                                      } else {
+                                        void startRefundRequest("contact human support", actionState.primaryAction);
                                       }
                                     }
                               }
@@ -856,12 +857,19 @@ export default function TraceGuideDemo() {
                             </button>
                             <button
                               type="button"
-                              onClick={() =>
+                              onClick={() => {
                                 logStudyEvent("action_secondary_clicked", {
                                   actionState: actionState.kind,
                                   nextAction: activeResponse.nextAction,
-                                })
-                              }
+                                });
+
+                                if (actionState.secondaryAction.toLowerCase().includes("human")) {
+                                  void startRefundRequest("contact human support", actionState.secondaryAction);
+                                  return;
+                                }
+
+                                inputRef.current?.focus();
+                              }}
                             >
                               {actionState.secondaryAction}
                             </button>
@@ -877,10 +885,10 @@ export default function TraceGuideDemo() {
 
           {userApproved && (
             <>
-              <div className={styles.userReply}>Yes, please</div>
+              <div className={styles.userReply}>{actionReply}</div>
               <AssistantRow>
                 <article className={styles.actionCard}>
-                  <h2>Great, I’ll prepare this request for you.</h2>
+                  <h2>{action?.requestId?.startsWith("HS") ? "I’ll send this to human support." : "Great, I’ll prepare this request for you."}</h2>
                   <p>Preparing the request with your order details and checked sources...</p>
                   <div className={styles.actionSteps}>
                     {actionSteps.map((step, index) => (
@@ -905,6 +913,7 @@ export default function TraceGuideDemo() {
         <form className={styles.inputBar} onSubmit={submitQuestion}>
           <span aria-hidden="true">◌</span>
           <input
+            ref={inputRef}
             value={inputValue}
             onChange={(event) => setInputValue(event.target.value)}
             placeholder="Ask another question..."
@@ -962,8 +971,16 @@ function StatusBar() {
     <div className={styles.statusBar} aria-hidden="true">
       <span>9:41</span>
       <div>
-        <span className={styles.signal}>▮▮▮</span>
-        <span className={styles.wifi}>⌒</span>
+        <span className={styles.signal}>
+          <i />
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className={styles.wifi}>
+          <i />
+          <i />
+        </span>
         <span className={styles.battery} />
       </div>
     </div>

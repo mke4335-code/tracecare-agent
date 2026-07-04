@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import styles from "../traceguide-demo/traceguide-demo.module.css";
 
@@ -244,7 +244,9 @@ export default function TraceGuideBaseline() {
   const [variables, setVariables] = useState<TraceVariables>(defaultVariables);
   const [action, setAction] = useState<ActionResponse | null>(null);
   const [actionStep, setActionStep] = useState(0);
+  const [actionReply, setActionReply] = useState("Yes");
   const [showOrdinaryDetails, setShowOrdinaryDetails] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const actionSteps = useMemo(
     () =>
@@ -359,11 +361,12 @@ export default function TraceGuideBaseline() {
     setInputValue("");
   }
 
-  async function startRequest() {
+  async function startRequest(nextActionOverride = response?.nextAction, replyLabel = "Yes") {
+    setActionReply(replyLabel);
     setPhase("action");
     setActionStep(0);
     logStudyEvent("yes_clicked", {
-      nextAction: response?.nextAction,
+      nextAction: nextActionOverride,
       variables,
       product: product.name,
     });
@@ -375,7 +378,7 @@ export default function TraceGuideBaseline() {
         body: JSON.stringify({
           action: "agent_request",
           product: product.name,
-          nextAction: response?.nextAction,
+          nextAction: nextActionOverride,
           variables,
         }),
       });
@@ -486,24 +489,39 @@ export default function TraceGuideBaseline() {
                               type="button"
                               onClick={
                                 actionState.canStartRequest
-                                  ? startRequest
-                                  : () =>
+                                  ? () => startRequest()
+                                  : () => {
                                       logStudyEvent("action_primary_clicked", {
                                         actionState: actionState.kind,
                                         nextAction: response.nextAction,
-                                      })
+                                      });
+
+                                      if (actionState.primaryAction.toLowerCase().includes("human")) {
+                                        void startRequest("contact human support", actionState.primaryAction);
+                                        return;
+                                      }
+
+                                      inputRef.current?.focus();
+                                    }
                               }
                             >
                               {actionState.primaryAction}
                             </button>
                             <button
                               type="button"
-                              onClick={() =>
+                              onClick={() => {
                                 logStudyEvent("action_secondary_clicked", {
                                   actionState: actionState.kind,
                                   nextAction: response.nextAction,
-                                })
-                              }
+                                });
+
+                                if (actionState.secondaryAction.toLowerCase().includes("human")) {
+                                  void startRequest("contact human support", actionState.secondaryAction);
+                                  return;
+                                }
+
+                                inputRef.current?.focus();
+                              }}
                             >
                               {actionState.secondaryAction}
                             </button>
@@ -519,10 +537,10 @@ export default function TraceGuideBaseline() {
 
           {phase === "action" && (
             <>
-              <div className={styles.userReply}>Yes</div>
+              <div className={styles.userReply}>{actionReply}</div>
               <AssistantRow>
                 <article className={styles.actionCard}>
-                  <h2>I’ll prepare this request for you.</h2>
+                  <h2>{action?.requestId?.startsWith("HS") ? "I’ll send this to human support." : "I’ll prepare this request for you."}</h2>
                   <p>Sending the request details...</p>
                   <div className={styles.actionSteps}>
                     {actionSteps.map((step, index) => (
@@ -547,6 +565,7 @@ export default function TraceGuideBaseline() {
         <form className={styles.inputBar} onSubmit={submitQuestion}>
           <span aria-hidden="true">◌</span>
           <input
+            ref={inputRef}
             value={inputValue}
             onChange={(event) => setInputValue(event.target.value)}
             placeholder="Ask another question..."
@@ -581,8 +600,16 @@ function StatusBar() {
     <div className={styles.statusBar} aria-hidden="true">
       <span>9:41</span>
       <div>
-        <span className={styles.signal}>▮▮▮</span>
-        <span className={styles.wifi}>⌒</span>
+        <span className={styles.signal}>
+          <i />
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className={styles.wifi}>
+          <i />
+          <i />
+        </span>
         <span className={styles.battery} />
       </div>
     </div>

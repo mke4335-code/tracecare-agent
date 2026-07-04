@@ -39,19 +39,69 @@
 .statusBar > div {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 
 .signal {
-  font-size: 12px;
-  letter-spacing: -5px;
-  transform: translateY(-1px);
+  width: 18px;
+  height: 12px;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.signal i {
+  display: block;
+  width: 3px;
+  border-radius: 2px;
+  background: #05060c;
+}
+
+.signal i:nth-child(1) {
+  height: 4px;
+}
+
+.signal i:nth-child(2) {
+  height: 6px;
+}
+
+.signal i:nth-child(3) {
+  height: 9px;
+}
+
+.signal i:nth-child(4) {
+  height: 12px;
 }
 
 .wifi {
-  font-size: 17px;
-  font-weight: 900;
-  transform: rotate(180deg) translateY(2px);
+  position: relative;
+  width: 17px;
+  height: 12px;
+  display: inline-block;
+}
+
+.wifi i {
+  position: absolute;
+  left: 50%;
+  border: 2px solid #05060c;
+  border-left-color: transparent;
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  transform: translateX(-50%);
+}
+
+.wifi i:nth-child(1) {
+  top: 1px;
+  width: 16px;
+  height: 10px;
+  border-radius: 14px 14px 0 0;
+}
+
+.wifi i:nth-child(2) {
+  top: 6px;
+  width: 8px;
+  height: 5px;
+  border-radius: 8px 8px 0 0;
 }
 
 .battery {
@@ -536,10 +586,7 @@
 }
 
 .answerHeader {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: start;
+  display: block;
 }
 
 .answerHeader strong {
@@ -551,7 +598,7 @@
 }
 
 .confidence {
-  display: inline-grid;
+  display: none;
   place-items: center;
   min-width: 40px;
   height: 27px;
@@ -624,7 +671,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
   border: 0;
   border-radius: 12px;
   background: #f1f0ff;
@@ -633,10 +679,6 @@
   font-weight: 780;
   letter-spacing: -0.03em;
   cursor: pointer;
-}
-
-.answerActions span {
-  font-size: 20px;
 }
 
 .askBubble {
@@ -658,8 +700,10 @@
 }
 
 .quickReplies button {
-  width: 72px;
+  min-width: 72px;
+  width: auto;
   height: 36px;
+  padding: 0 16px;
   border-radius: 10px;
   font-size: 15px;
   font-weight: 760;
