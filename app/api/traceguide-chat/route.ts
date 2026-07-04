@@ -64,6 +64,15 @@ type BuyerSource = {
   matchedAnswer?: string;
 };
 
+type ActionState = {
+  kind: "ready" | "needs_evidence" | "needs_human_review" | "informational";
+  label: string;
+  prompt: string;
+  primaryAction: string;
+  secondaryAction: string;
+  canStartRequest: boolean;
+};
+
 type VariableAssessment = {
   answer?: string;
   nextAction: string;
@@ -837,6 +846,54 @@ function taskTypeFor(scenario: Scenario, variables = scenario.variables) {
   return "refund_or_return_support";
 }
 
+function actionStateFor(scenario: Scenario, assessment: VariableAssessment): ActionState {
+  const taskType = assessment.taskType || taskTypeFor(scenario);
+  const nextAction = assessment.nextAction.toLowerCase();
+
+  if (/evidence_required/.test(taskType) || /photo|evidence/.test(nextAction)) {
+    return {
+      kind: "needs_evidence",
+      label: "Photo needed",
+      prompt: "Please add a photo before I prepare the request.",
+      primaryAction: "I have a photo",
+      secondaryAction: "Talk to human",
+      canStartRequest: false,
+    };
+  }
+
+  if (/human_review|boundary_exception/.test(taskType) || /human support|review/.test(nextAction)) {
+    return {
+      kind: "needs_human_review",
+      label: "Review needed",
+      prompt: "This case needs human review before a request can be started.",
+      primaryAction: "Talk to human",
+      secondaryAction: "Ask another question",
+      canStartRequest: false,
+    };
+  }
+
+  if (/safety|allergen/.test(taskType)) {
+    return {
+      kind: "informational",
+      label: "Advice only",
+      prompt:
+        "I can help explain the product information, but I would not start a service request from this answer.",
+      primaryAction: "Talk to human",
+      secondaryAction: "Ask another question",
+      canStartRequest: false,
+    };
+  }
+
+  return {
+    kind: "ready",
+    label: "Ready to request",
+    prompt: `Would you like me to ${assessment.nextAction}?`,
+    primaryAction: "Yes",
+    secondaryAction: "No",
+    canStartRequest: true,
+  };
+}
+
 function actionPreviewFor(scenario: Scenario, nextAction = scenario.nextAction) {
   return {
     label: nextAction,
@@ -1216,6 +1273,7 @@ export async function POST(request: Request) {
       loadingSteps: scenario.loadingSteps,
       agentStages: agentStagesFor(scenario),
       taskType: assessment.taskType || taskTypeFor(scenario, variables),
+      actionState: actionStateFor(scenario, assessment),
       actionPreview: actionPreviewFor(scenario, nextAction),
       systemBoundary:
         "Functional research prototype: reads the knowledge base and calls an LLM for the answer; order records and service actions are simulated for safe testing.",
@@ -1240,6 +1298,10 @@ export async function POST(request: Request) {
       loadingSteps: scenario.loadingSteps,
       agentStages: agentStagesFor(scenario),
       taskType: taskTypeFor(scenario),
+      actionState: actionStateFor(scenario, {
+        nextAction: scenario.nextAction,
+        taskType: taskTypeFor(scenario),
+      }),
       actionPreview: actionPreviewFor(scenario),
       systemBoundary:
         "Functional research prototype fallback: uses built-in demo knowledge when live retrieval or LLM generation is unavailable.",

@@ -27,11 +27,21 @@ type TraceVariables = {
   evidence: string;
 };
 
+type ActionState = {
+  kind: "ready" | "needs_evidence" | "needs_human_review" | "informational";
+  label: string;
+  prompt: string;
+  primaryAction: string;
+  secondaryAction: string;
+  canStartRequest: boolean;
+};
+
 type BaselineResponse = {
   answer: string;
   confidence?: number;
   variables: TraceVariables;
   nextAction: string;
+  actionState?: ActionState;
   product: ProductContext;
 };
 
@@ -185,6 +195,43 @@ function inferProductFromQuestion(question: string): ProductContext {
   return defaultProduct;
 }
 
+function actionStateForResponse(response: BaselineResponse): ActionState {
+  if (response.actionState) return response.actionState;
+
+  const lower = response.nextAction.toLowerCase();
+
+  if (lower.includes("photo") || lower.includes("evidence")) {
+    return {
+      kind: "needs_evidence",
+      label: "Photo needed",
+      prompt: "Please add a photo before I prepare the request.",
+      primaryAction: "I have a photo",
+      secondaryAction: "Talk to human",
+      canStartRequest: false,
+    };
+  }
+
+  if (lower.includes("human") || lower.includes("review")) {
+    return {
+      kind: "needs_human_review",
+      label: "Review needed",
+      prompt: "This case needs human review before a request can be started.",
+      primaryAction: "Talk to human",
+      secondaryAction: "Ask another question",
+      canStartRequest: false,
+    };
+  }
+
+  return {
+    kind: "ready",
+    label: "Ready to request",
+    prompt: `Would you like me to ${response.nextAction}?`,
+    primaryAction: "Yes",
+    secondaryAction: "No",
+    canStartRequest: true,
+  };
+}
+
 export default function TraceGuideBaseline() {
   const [participantCode, setParticipantCode] = useState("");
   const [clientSessionId, setClientSessionId] = useState("");
@@ -273,6 +320,7 @@ export default function TraceGuideBaseline() {
         answer: stripEvidenceFeatures(result.answer || "I can help with this order. Would you like me to prepare a support request?"),
         variables: result.variables || defaultVariables,
         nextAction: result.nextAction || "start a support request",
+        actionState: result.actionState,
         product: nextProduct,
       });
       logStudyEvent("answer_shown", {
@@ -289,6 +337,14 @@ export default function TraceGuideBaseline() {
           "I can help with this order, but I need a little more information before I prepare a support request.",
         variables: defaultVariables,
         nextAction: "contact human support",
+        actionState: {
+          kind: "needs_human_review",
+          label: "Review needed",
+          prompt: "This case needs human review before a request can be started.",
+          primaryAction: "Talk to human",
+          secondaryAction: "Ask another question",
+          canStartRequest: false,
+        },
         product: inferProductFromQuestion(trimmed),
       });
     } finally {
@@ -418,18 +474,43 @@ export default function TraceGuideBaseline() {
               {phase === "answer" && (
                 <AssistantRow compact>
                   <div>
-                    <div className={styles.askBubble}>Would you like me to {response.nextAction}?</div>
-                    <div className={styles.quickReplies}>
-                      <button type="button" onClick={startRequest}>
-                        Yes
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => logStudyEvent("no_clicked", { nextAction: response.nextAction })}
-                      >
-                        No
-                      </button>
-                    </div>
+                    {(() => {
+                      const actionState = actionStateForResponse(response);
+
+                      return (
+                        <>
+                          <div className={styles.actionStatusChip}>{actionState.label}</div>
+                          <div className={styles.askBubble}>{actionState.prompt}</div>
+                          <div className={styles.quickReplies}>
+                            <button
+                              type="button"
+                              onClick={
+                                actionState.canStartRequest
+                                  ? startRequest
+                                  : () =>
+                                      logStudyEvent("action_primary_clicked", {
+                                        actionState: actionState.kind,
+                                        nextAction: response.nextAction,
+                                      })
+                              }
+                            >
+                              {actionState.primaryAction}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                logStudyEvent("action_secondary_clicked", {
+                                  actionState: actionState.kind,
+                                  nextAction: response.nextAction,
+                                })
+                              }
+                            >
+                              {actionState.secondaryAction}
+                            </button>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </AssistantRow>
               )}

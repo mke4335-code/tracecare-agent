@@ -22,6 +22,15 @@ type TraceVariables = {
   evidence: string;
 };
 
+type ActionState = {
+  kind: "ready" | "needs_evidence" | "needs_human_review" | "informational";
+  label: string;
+  prompt: string;
+  primaryAction: string;
+  secondaryAction: string;
+  canStartRequest: boolean;
+};
+
 type TraceResponse = {
   runId?: string;
   answer: string;
@@ -31,6 +40,7 @@ type TraceResponse = {
   sourceTags: string[];
   variables: TraceVariables;
   nextAction: string;
+  actionState?: ActionState;
   product: ProductContext;
   loadingTitle: string;
   loadingSteps: string[];
@@ -309,6 +319,43 @@ function inferVariables(prompt: string): TraceVariables {
   return fallbackResponse.variables;
 }
 
+function actionStateForResponse(response: TraceResponse): ActionState {
+  if (response.actionState) return response.actionState;
+
+  const lower = response.nextAction.toLowerCase();
+
+  if (lower.includes("photo") || lower.includes("evidence")) {
+    return {
+      kind: "needs_evidence",
+      label: "Photo needed",
+      prompt: "Please add a photo before I prepare the request.",
+      primaryAction: "I have a photo",
+      secondaryAction: "Talk to human",
+      canStartRequest: false,
+    };
+  }
+
+  if (lower.includes("human") || lower.includes("review")) {
+    return {
+      kind: "needs_human_review",
+      label: "Review needed",
+      prompt: "This case needs human review before a request can be started.",
+      primaryAction: "Talk to human",
+      secondaryAction: "Ask another question",
+      canStartRequest: false,
+    };
+  }
+
+  return {
+    kind: "ready",
+    label: "Ready to request",
+    prompt: `Would you like me to ${response.nextAction}?`,
+    primaryAction: "Yes",
+    secondaryAction: "No",
+    canStartRequest: true,
+  };
+}
+
 function inferLoadingTitle(prompt: string) {
   if (includesAny(prompt, ["yoghurt", "yogurt", "chilled", "酸奶", "冷藏"])) return "Checking chilled food return rules...";
   if (includesAny(prompt, ["sandwich", "三明治"])) return "Checking fresh food return rules...";
@@ -552,6 +599,7 @@ export default function TraceGuideDemo() {
       sourceTags: result.sourceTags?.length ? result.sourceTags : fallbackResponse.sourceTags,
       variables: result.variables || fallbackResponse.variables,
       nextAction: result.nextAction || "start a refund request",
+      actionState: result.actionState,
       product: result.product || inferProduct(question),
       loadingTitle: result.loadingTitle || "Checking support details...",
       loadingSteps: result.loadingSteps?.length ? result.loadingSteps : inferLoadingSteps(question),
@@ -779,18 +827,48 @@ export default function TraceGuideDemo() {
               {!userApproved && (
                 <AssistantRow compact>
                   <div>
-                    <div className={styles.askBubble}>Would you like me to {activeResponse.nextAction}?</div>
-                    <div className={styles.quickReplies}>
-                      <button type="button" onClick={startRefundRequest}>
-                        Yes
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => logStudyEvent("no_clicked", { nextAction: activeResponse.nextAction })}
-                      >
-                        No
-                      </button>
-                    </div>
+                    {(() => {
+                      const actionState = actionStateForResponse(activeResponse);
+
+                      return (
+                        <>
+                          <div className={styles.actionStatusChip}>{actionState.label}</div>
+                          <div className={styles.askBubble}>{actionState.prompt}</div>
+                          <div className={styles.quickReplies}>
+                            <button
+                              type="button"
+                              onClick={
+                                actionState.canStartRequest
+                                  ? startRefundRequest
+                                  : () => {
+                                      logStudyEvent("action_primary_clicked", {
+                                        actionState: actionState.kind,
+                                        nextAction: activeResponse.nextAction,
+                                      });
+
+                                      if (actionState.kind === "needs_evidence") {
+                                        setSheetMode("variables");
+                                      }
+                                    }
+                              }
+                            >
+                              {actionState.primaryAction}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                logStudyEvent("action_secondary_clicked", {
+                                  actionState: actionState.kind,
+                                  nextAction: activeResponse.nextAction,
+                                })
+                              }
+                            >
+                              {actionState.secondaryAction}
+                            </button>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </AssistantRow>
               )}
