@@ -6,7 +6,7 @@ import styles from "../traceguide-demo/traceguide-demo.module.css";
 
 type ProductContext = {
   name: string;
-  image: "glass-box" | "cookies" | "container-set" | "yoghurt" | "sandwich" | "snack";
+  image: "glass-box" | "cookies" | "container-set" | "coffee-maker" | "protein-bar" | "yoghurt" | "sandwich" | "snack";
   detail: string;
   status: string;
   linkLabel: string;
@@ -15,7 +15,7 @@ type ProductContext = {
 type StudyTask = {
   id: string;
   set: "1" | "2";
-  category: "Clear eligible refund" | "Boundary exception" | "Insufficient evidence";
+  category: "Product information decision" | "Order modification decision" | "Return/refund decision";
   label: string;
   text: string;
 };
@@ -69,48 +69,50 @@ const studyTasks: StudyTask[] = [
   {
     id: "S1-T1",
     set: "1",
-    category: "Clear eligible refund",
-    label: "Damaged lunch box",
-    text: "The glass lunch box arrived damaged. Can I return it?",
+    category: "Product information decision",
+    label: "Peanut allergy: cookies",
+    text: "I’m allergic to peanuts. Can I eat these milk cookies?",
   },
   {
     id: "S1-T2",
     set: "1",
-    category: "Boundary exception",
-    label: "Changed mind on yoghurt",
-    text: "The chilled yoghurt is unopened, but I changed my mind. Can I return it?",
+    category: "Order modification decision",
+    label: "Change address before dispatch",
+    text: "Can I change the delivery address for my coffee maker before it is shipped?",
   },
   {
     id: "S1-T3",
     set: "1",
-    category: "Insufficient evidence",
-    label: "Damaged food item",
-    text: "The cookies arrived damaged. Can I get a refund?",
+    category: "Return/refund decision",
+    label: "Damaged lunch box",
+    text: "The glass lunch box arrived damaged. Can I return it?",
   },
   {
     id: "S2-T1",
     set: "2",
-    category: "Clear eligible refund",
-    label: "Broken container lid",
-    text: "The glass food container lid arrived broken. Can I get a replacement or refund?",
+    category: "Product information decision",
+    label: "Peanut allergy: protein bar",
+    text: "I’m allergic to peanuts. Can I eat this protein bar?",
   },
   {
     id: "S2-T2",
     set: "2",
-    category: "Boundary exception",
-    label: "Changed mind on sandwich",
-    text: "The fresh sandwich is unopened, but I changed my mind. Can I return it?",
+    category: "Order modification decision",
+    label: "Change address after dispatch",
+    text: "My fresh sandwich is already out for delivery. Can I change the delivery address?",
   },
   {
     id: "S2-T3",
     set: "2",
-    category: "Insufficient evidence",
+    category: "Return/refund decision",
     label: "Snack package damaged",
     text: "The snack package arrived damaged, but I have not added a photo yet. Can I get a refund?",
   },
 ];
 
 function productImageSrc(product: ProductContext) {
+  if (product.image === "coffee-maker") return "/traceguide-coffee-maker.jpg";
+  if (product.image === "protein-bar") return "/traceguide-protein-bar.jpg";
   if (product.image === "yoghurt") return "/traceguide-yoghurt.jpg";
   if (product.image === "sandwich") return "/traceguide-sandwich.jpg";
   if (product.image === "snack") return "/traceguide-snack.jpg";
@@ -140,6 +142,26 @@ function formatBaselineAnswer(answer: string) {
 
 function inferProductFromQuestion(question: string): ProductContext {
   const q = question.toLowerCase();
+  if (q.includes("protein bar")) {
+    return {
+      name: "Protein Bar",
+      image: "protein-bar",
+      detail: "60g / bar",
+      status: "Delivered yesterday",
+      linkLabel: "Product details",
+    };
+  }
+
+  if (q.includes("coffee maker") || q.includes("coffee machine")) {
+    return {
+      name: "Coffee Maker",
+      image: "coffee-maker",
+      detail: "1 item",
+      status: "Not dispatched yet",
+      linkLabel: "Order details",
+    };
+  }
+
   if (q.includes("yoghurt") || q.includes("yogurt") || q.includes("chilled")) {
     return {
       name: "Chilled Yoghurt",
@@ -155,8 +177,8 @@ function inferProductFromQuestion(question: string): ProductContext {
       name: "Fresh Sandwich",
       image: "sandwich",
       detail: "1 pack",
-      status: "Delivered today",
-      linkLabel: "Product details",
+      status: q.includes("address") || q.includes("out for delivery") ? "Out for delivery" : "Delivered today",
+      linkLabel: q.includes("address") || q.includes("out for delivery") ? "Delivery details" : "Product details",
     };
   }
 
@@ -204,9 +226,9 @@ function actionStateForResponse(response: BaselineResponse): ActionState {
     return {
       kind: "needs_evidence",
       label: "Photo needed",
-      prompt: "Please add a photo before I prepare the request.",
-      primaryAction: "I have a photo",
-      secondaryAction: "Talk to human",
+      prompt: "Would you like to add photo evidence now?",
+      primaryAction: "Yes",
+      secondaryAction: "No",
       canStartRequest: false,
     };
   }
@@ -215,9 +237,9 @@ function actionStateForResponse(response: BaselineResponse): ActionState {
     return {
       kind: "needs_human_review",
       label: "Review needed",
-      prompt: "This case needs human review before a request can be started.",
-      primaryAction: "Talk to human",
-      secondaryAction: "Ask another question",
+      prompt: "Would you like me to connect you to human support?",
+      primaryAction: "Yes",
+      secondaryAction: "No",
       canStartRequest: false,
     };
   }
@@ -482,7 +504,6 @@ export default function TraceGuideBaseline() {
 
                       return (
                         <>
-                          <div className={styles.actionStatusChip}>{actionState.label}</div>
                           <div className={styles.askBubble}>{actionState.prompt}</div>
                           <div className={styles.quickReplies}>
                             <button
@@ -496,8 +517,13 @@ export default function TraceGuideBaseline() {
                                         nextAction: response.nextAction,
                                       });
 
-                                      if (actionState.primaryAction.toLowerCase().includes("human")) {
+                                      if (actionState.kind === "needs_human_review") {
                                         void startRequest("contact human support", actionState.primaryAction);
+                                        return;
+                                      }
+
+                                      if (actionState.kind === "needs_evidence") {
+                                        void startRequest("add photo evidence", actionState.primaryAction);
                                         return;
                                       }
 
@@ -514,11 +540,6 @@ export default function TraceGuideBaseline() {
                                   actionState: actionState.kind,
                                   nextAction: response.nextAction,
                                 });
-
-                                if (actionState.secondaryAction.toLowerCase().includes("human")) {
-                                  void startRequest("contact human support", actionState.secondaryAction);
-                                  return;
-                                }
 
                                 inputRef.current?.focus();
                               }}
@@ -669,9 +690,6 @@ function OrdinaryDetailsSheet({
           <h2>{product.linkLabel}</h2>
           <p>Standard product and order information available in a normal shopping app.</p>
         </div>
-        <button className={styles.donePill} type="button" onClick={onDone}>
-          Done
-        </button>
       </div>
 
       <article className={styles.ordinaryDetailCard}>
