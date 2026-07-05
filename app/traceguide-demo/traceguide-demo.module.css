@@ -1011,10 +1011,6 @@
 }
 
 .ordinaryDetailHeader {
-  display: grid;
-  grid-template-columns: 1fr 72px;
-  gap: 14px;
-  align-items: start;
   margin: 2px 5px 20px;
 }
 

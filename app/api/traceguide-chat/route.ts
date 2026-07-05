@@ -23,7 +23,7 @@ type RankedDoc = KnowledgeDoc & {
 
 type ProductContext = {
   name: string;
-  image: "glass-box" | "cookies" | "container-set" | "yoghurt" | "sandwich" | "snack";
+  image: "glass-box" | "cookies" | "container-set" | "coffee-maker" | "protein-bar" | "yoghurt" | "sandwich" | "snack";
   detail: string;
   status: string;
   linkLabel: string;
@@ -38,6 +38,9 @@ type ScenarioKey =
   | "snack_package_evidence_unclear"
   | "late_delivery_compensation"
   | "allergen_safety"
+  | "protein_bar_allergen_safety"
+  | "coffee_maker_address_change"
+  | "fresh_sandwich_address_change"
   | "missing_accessory"
   | "unknown";
 
@@ -144,6 +147,46 @@ const demoKnowledge: KnowledgeDoc[] = [
     status: "active",
     content:
       "When customers ask about allergens, support must answer only based on verified product ingredient data. If allergen data is missing or uncertain, advise the customer not to eat the product and contact human support.",
+  },
+  {
+    id: "demo-protein-bar-ingredients",
+    title: "Protein Bar ingredients and allergen notice",
+    category: "Product details",
+    status: "active",
+    content:
+      "The Protein Bar ingredients include oats, cocoa, milk protein, soy lecithin and roasted peanut pieces. The allergen notice says it contains peanuts, milk and soy.",
+  },
+  {
+    id: "demo-address-change-before-dispatch",
+    title: "Address change before dispatch policy",
+    category: "Order modification",
+    status: "active",
+    content:
+      "A delivery address can usually be changed before the order is dispatched. The customer must confirm the new address before support submits the change request.",
+  },
+  {
+    id: "demo-address-change-after-dispatch",
+    title: "Address change after dispatch policy",
+    category: "Order modification",
+    status: "active",
+    content:
+      "After an order has been dispatched or is out for delivery, the delivery address usually cannot be changed in the normal self-service flow. Support may contact the carrier or hand the case to a human agent.",
+  },
+  {
+    id: "demo-coffee-maker-order-status",
+    title: "Order status — Coffee Maker",
+    category: "Order status",
+    status: "active",
+    content:
+      "The Coffee Maker order is still processing and has not been dispatched. Because the package has not left the warehouse, an address change request can be prepared before submission.",
+  },
+  {
+    id: "demo-fresh-sandwich-delivery-status",
+    title: "Delivery status — Fresh Sandwich",
+    category: "Order status",
+    status: "active",
+    content:
+      "The Fresh Sandwich order is already out for delivery. The normal address change window has closed, so any change needs human support or carrier review.",
   },
   {
     id: "demo-missing-accessory-refund",
@@ -518,6 +561,96 @@ const scenarios: Record<Exclude<ScenarioKey, "unknown">, Scenario> = {
       return `I would not recommend eating this product.\n\nThe ingredient information lists peanut sauce and the allergen notice mentions peanuts [${ingredients}]. For allergy questions, I should only use verified product data and suggest human support if there is any risk [${safety}].`;
     },
   },
+  protein_bar_allergen_safety: {
+    key: "protein_bar_allergen_safety",
+    product: {
+      name: "Protein Bar",
+      image: "protein-bar",
+      detail: "60g / bar",
+      status: "Delivered yesterday",
+      linkLabel: "Product details",
+    },
+    variables: {
+      issueIdentified: "Allergen concern",
+      request: "Product safety advice",
+      reason: "Customer is allergic to peanuts",
+      evidence: "Ingredient data available",
+    },
+    nextAction: "contact human support",
+    sourceTags: ["Ingredients", "Allergen notice", "Safety rule"],
+    loadingTitle: "Checking product safety...",
+    loadingSteps: ["Understanding allergy concern", "Reading ingredients", "Checking safety rule", "Preparing answer"],
+    sourceMatchers: [
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Protein Bar ingredients", "roasted peanut pieces", "contains peanuts"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Allergen information safety", "verified product ingredient", "do not eat"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["peanuts", "milk", "soy"]),
+    ],
+    answerTemplate: (sources) => {
+      const ingredients = sourceNumber(sources, (source) => /ingredient|product/i.test(source.category + source.title), 1);
+      const safety = sourceNumber(sources, (source) => /safety|allergen/i.test(source.category + source.title), 2);
+      return `I would not recommend eating this product.\n\nThe product information says the Protein Bar contains roasted peanut pieces and the allergen notice includes peanuts [${ingredients}]. For allergy questions, I should use verified ingredient data and avoid reassuring you when there is a listed allergen risk [${safety}].`;
+    },
+  },
+  coffee_maker_address_change: {
+    key: "coffee_maker_address_change",
+    product: {
+      name: "Coffee Maker",
+      image: "coffee-maker",
+      detail: "1 item",
+      status: "Not dispatched yet",
+      linkLabel: "Order details",
+    },
+    variables: {
+      issueIdentified: "Delivery address change",
+      request: "Change delivery address",
+      reason: "Order has not been dispatched",
+      evidence: "Order status available",
+    },
+    nextAction: "prepare an address change request",
+    sourceTags: ["Address policy", "Order status", "Confirmation needed"],
+    loadingTitle: "Checking if the address can be changed...",
+    loadingSteps: ["Understanding your request", "Checking order status", "Reading address change policy", "Preparing answer"],
+    sourceMatchers: [
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Address change before dispatch", "before the order is dispatched", "new address"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Coffee Maker", "not been dispatched", "processing"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["confirm the new address", "submits the change request"]),
+    ],
+    answerTemplate: (sources) => {
+      const policy = sourceNumber(sources, (source) => /modification|address/i.test(source.category + source.title), 1);
+      const order = sourceNumber(sources, (source) => /order/i.test(source.category), 2);
+      return `Yes, I can help prepare an address change request.\n\nThe order status shows the Coffee Maker has not been dispatched yet [${order}]. The address change policy says the delivery address can usually be changed before dispatch, but you need to confirm the new address before it is submitted [${policy}].`;
+    },
+  },
+  fresh_sandwich_address_change: {
+    key: "fresh_sandwich_address_change",
+    product: {
+      name: "Fresh Sandwich",
+      image: "sandwich",
+      detail: "1 pack",
+      status: "Out for delivery",
+      linkLabel: "Delivery details",
+    },
+    variables: {
+      issueIdentified: "Delivery address change",
+      request: "Change delivery address",
+      reason: "Order is already out for delivery",
+      evidence: "Delivery status available",
+    },
+    nextAction: "send this to human support for review",
+    sourceTags: ["Address policy", "Delivery status", "Human support"],
+    loadingTitle: "Checking delivery status...",
+    loadingSteps: ["Understanding your request", "Checking delivery status", "Reading address change policy", "Preparing answer"],
+    sourceMatchers: [
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Address change after dispatch", "out for delivery", "cannot be changed"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["Fresh Sandwich", "out for delivery", "normal address change window"]),
+      (doc) => includesAny(`${doc.title} ${doc.category} ${doc.content}`, ["human support", "carrier review"]),
+    ],
+    answerTemplate: (sources) => {
+      const policy = sourceNumber(sources, (source) => /modification|address/i.test(source.category + source.title), 1);
+      const order = sourceNumber(sources, (source) => /order|delivery/i.test(source.category + source.title), 2);
+      return `I would not start a normal address change from this screen.\n\nThe delivery status says the Fresh Sandwich is already out for delivery [${order}]. The address change policy says orders that have been dispatched or are out for delivery usually cannot be changed through the normal self-service flow, so this needs human support or carrier review [${policy}].`;
+    },
+  },
   missing_accessory: {
     key: "missing_accessory",
     product: {
@@ -582,15 +715,23 @@ const unknownScenario: Scenario = {
 
 function detectScenario(question: string, taskId?: string): Scenario {
   const task = (taskId || "").toUpperCase();
-  if (task === "S1-T1") return scenarios.glass_damaged_refund;
-  if (task === "S1-T2") return scenarios.chilled_yoghurt_change_mind;
-  if (task === "S1-T3") return scenarios.damaged_food_return;
-  if (task === "S2-T1") return scenarios.glass_container_broken;
-  if (task === "S2-T2") return scenarios.fresh_sandwich_change_mind;
+  if (task === "S1-T1") return scenarios.allergen_safety;
+  if (task === "S1-T2") return scenarios.coffee_maker_address_change;
+  if (task === "S1-T3") return scenarios.glass_damaged_refund;
+  if (task === "S2-T1") return scenarios.protein_bar_allergen_safety;
+  if (task === "S2-T2") return scenarios.fresh_sandwich_address_change;
   if (task === "S2-T3") return scenarios.snack_package_evidence_unclear;
 
   const q = question.toLowerCase();
 
+  if (includesAny(q, ["change address", "delivery address", "modify address", "new address", "改地址", "修改地址", "收货地址"])) {
+    if (includesAny(q, ["sandwich", "fresh", "out for delivery", "already shipped", "already dispatched", "三明治", "已发货", "配送中"])) {
+      return scenarios.fresh_sandwich_address_change;
+    }
+
+    return scenarios.coffee_maker_address_change;
+  }
+  if (includesAny(q, ["protein bar", "蛋白棒"])) return scenarios.protein_bar_allergen_safety;
   if (includesAny(q, ["sandwich", "fresh sandwich", "三明治", "鲜食"])) {
     return scenarios.fresh_sandwich_change_mind;
   }
@@ -643,11 +784,45 @@ function mergeKnowledge(remoteDocs: KnowledgeDoc[]) {
   return Array.from(byKey.values());
 }
 
+const productNames = [
+  "Glass Lunch Box",
+  "Glass Food Container",
+  "Glass Food Containers Set",
+  "Milk Cookies",
+  "Coffee Maker",
+  "Protein Bar",
+  "Chilled Yoghurt",
+  "Fresh Sandwich",
+  "Snack Pack",
+];
+
+function isRelevantToScenario(doc: KnowledgeDoc, scenario: Scenario) {
+  const text = `${doc.title} ${doc.content}`.toLowerCase();
+  const scenarioProduct = scenario.product.name.toLowerCase();
+  const mentionedOtherProduct = productNames.some((name) => {
+    const lowerName = name.toLowerCase();
+    return lowerName !== scenarioProduct && text.includes(lowerName);
+  });
+
+  if (!mentionedOtherProduct) return true;
+
+  const category = doc.category.toLowerCase();
+  const isProductOrOrderSpecific =
+    category.includes("product") ||
+    category.includes("order") ||
+    category.includes("evidence") ||
+    doc.title.toLowerCase().startsWith("order ") ||
+    doc.title.toLowerCase().startsWith("product ");
+
+  return !isProductOrOrderSpecific;
+}
+
 function pickScenarioDocs(docs: KnowledgeDoc[], scenario: Scenario, question: string, variables = scenario.variables) {
+  const relevantDocs = docs.filter((doc) => isRelevantToScenario(doc, scenario));
   const selected: RankedDoc[] = [];
 
   for (const matcher of scenario.sourceMatchers) {
-    const match = docs
+    const match = relevantDocs
       .filter((doc) => !selected.some((item) => item.id === doc.id))
       .map((doc) => ({ ...doc, score: scoreDoc(question, doc, scenario, variables) }))
       .sort((a, b) => b.score - a.score)
@@ -656,7 +831,7 @@ function pickScenarioDocs(docs: KnowledgeDoc[], scenario: Scenario, question: st
     if (match) selected.push(match);
   }
 
-  const ranked = docs
+  const ranked = relevantDocs
     .filter((doc) => !selected.some((item) => item.id === doc.id))
     .map((doc) => ({ ...doc, score: scoreDoc(question, doc, scenario, variables) }))
     .sort((a, b) => b.score - a.score)
@@ -691,6 +866,7 @@ function sourceTags(scenario: Scenario, sources: BuyerSource[]) {
     ) return "Food exception";
     if (scenario.key === "snack_package_evidence_unclear" && /evidence|photo/i.test(source.category + source.title)) return "Evidence needed";
     if (/refund/i.test(source.category)) return scenario.key === "missing_accessory" ? "Missing accessory" : "Return policy";
+    if (/modification/i.test(source.category) || /address/i.test(source.title)) return "Address policy";
     if (/return/i.test(source.category)) return "Food return rule";
     if (/logistics/i.test(source.category)) return "Delivery policy";
     if (/safety/i.test(source.category)) return "Safety rule";
@@ -815,8 +991,18 @@ function cleanBuyerAnswer(answer: string) {
         return [cleaned.slice(0, splitIndex + 1), cleaned.slice(splitIndex + 2)];
       })();
 
-  const firstWithCitation = /\[\d+\]/.test(firstPart) ? firstPart : `${firstPart} [1]`;
-  return [firstWithCitation, ...restParts].join("\n\n");
+  const heading = firstPart
+    .replace(/\s*\[\d+\]/g, "")
+    .replace(/,?\s+(as stated|as shown|as per|according to|as mentioned)\b.*$/i, ".")
+    .trim();
+
+  if (/\[\d+\]/.test(cleaned)) return [heading, ...restParts].join("\n\n");
+
+  if (restParts.length) {
+    return [heading, `${restParts[0]} [1]`, ...restParts.slice(1)].join("\n\n");
+  }
+
+  return `${heading} [1]`;
 }
 
 function agentStagesFor(scenario: Scenario) {
@@ -837,6 +1023,8 @@ function taskTypeFor(scenario: Scenario, variables = scenario.variables) {
     evidence.includes("needed");
 
   if (scenario.key.includes("change_mind")) return "boundary_exception_review";
+  if (scenario.key === "coffee_maker_address_change") return "order_modification_support";
+  if (scenario.key === "fresh_sandwich_address_change") return "human_review";
   if ((scenario.key.includes("evidence") || scenario.key === "damaged_food_return") && evidenceMissing) {
     return "evidence_required_review";
   }
@@ -876,8 +1064,7 @@ function actionStateFor(scenario: Scenario, assessment: VariableAssessment): Act
     return {
       kind: "informational",
       label: "Advice only",
-      prompt:
-        "I can help explain the product information, but I would not start a service request from this answer.",
+      prompt: "I can show the product information used for this answer.",
       primaryAction: "Talk to human",
       secondaryAction: "Ask another question",
       canStartRequest: false,
@@ -942,6 +1129,44 @@ function assessVariables(scenario: Scenario, variables: TraceVariables, sources:
     "broken",
   ]);
   const wantsHuman = hasAnyValue(variables.request, ["human support", "ask seller"]) || hasAnyValue(scenario.nextAction, ["human support"]);
+
+  if (scenario.key === "allergen_safety" || scenario.key === "protein_bar_allergen_safety") {
+    const ingredients = sourceRef(sources, (source) => /ingredient|product/i.test(source.category + source.title), 1);
+    const safety = sourceRef(sources, (source) => /safety|allergen/i.test(source.category + source.title), 2);
+    const ingredientClaim =
+      scenario.key === "protein_bar_allergen_safety"
+        ? "contains roasted peanut pieces and the allergen notice includes peanuts"
+        : "lists peanut sauce and the allergen notice mentions peanuts";
+
+    return {
+      answer: `I would not recommend eating this product.\n\nThe ${scenario.product.name} product information ${ingredientClaim} [${ingredients}]. For allergy questions, I should use verified product data and avoid reassuring you when there is a listed allergen risk [${safety}].`,
+      nextAction: "contact human support",
+      taskType: "product_safety_advice",
+      sourceTags: ["Ingredients", "Allergen notice", "Safety rule"],
+    };
+  }
+
+  if (scenario.key === "coffee_maker_address_change") {
+    const policy = sourceRef(sources, (source) => /modification|address/i.test(source.category + source.title), 1);
+    const order = sourceRef(sources, (source) => /order/i.test(source.category), 2);
+    return {
+      answer: `Yes, I can help prepare an address change request.\n\nThe order status shows the Coffee Maker has not been dispatched yet [${order}]. The address change policy says the delivery address can usually be changed before dispatch, but you need to confirm the new address before it is submitted [${policy}].`,
+      nextAction: "prepare an address change request",
+      taskType: "order_modification_support",
+      sourceTags: ["Address policy", "Order status", "Confirmation needed"],
+    };
+  }
+
+  if (scenario.key === "fresh_sandwich_address_change") {
+    const policy = sourceRef(sources, (source) => /modification|address/i.test(source.category + source.title), 1);
+    const order = sourceRef(sources, (source) => /order|delivery/i.test(source.category + source.title), 2);
+    return {
+      answer: `I would not start a normal address change from this screen.\n\nThe delivery status says the Fresh Sandwich is already out for delivery [${order}]. The address change policy says orders that have been dispatched or are out for delivery usually cannot be changed through the normal self-service flow, so this needs human support or carrier review [${policy}].`,
+      nextAction: "send this to human support for review",
+      taskType: "human_review",
+      sourceTags: ["Address policy", "Delivery status", "Human support"],
+    };
+  }
 
   if (wantsHuman && !qualityOrSafetyIssue) {
     const policy = sourceRef(sources, (source) => /policy|return|support/i.test(source.category + source.title), 1);
@@ -1197,8 +1422,11 @@ function isSafeLLMAnswer(answer: string, scenario: Scenario, sources: BuyerSourc
   if (scenario.product.name !== "Milk Cookies" && includesAny(lower, ["milk cookies", "cookie order"])) return false;
   if (scenario.product.name !== "Glass Lunch Box" && includesAny(lower, ["glass lunch box"])) return false;
   if (scenario.product.name !== "Chilled Yoghurt" && includesAny(lower, ["chilled yoghurt", "yoghurt order", "yogurt order"])) return false;
+  if (scenario.product.name !== "Protein Bar" && includesAny(lower, ["protein bar"])) return false;
+  if (scenario.product.name !== "Coffee Maker" && includesAny(lower, ["coffee maker"])) return false;
   if (scenario.key === "glass_damaged_refund" && includesAny(lower, ["food item", "food product", "hygiene"])) return false;
-  if (scenario.key === "allergen_safety" && includesAny(lower, ["safe to eat", "you can eat"])) return false;
+  if ((scenario.key === "allergen_safety" || scenario.key === "protein_bar_allergen_safety") && includesAny(lower, ["safe to eat", "you can eat", "fine to eat"])) return false;
+  if (scenario.key === "fresh_sandwich_address_change" && includesAny(lower, ["i can change the address", "can change the delivery address", "start an address change", "prepare an address change request"])) return false;
   if (scenario.key === "chilled_yoghurt_change_mind" && includesAny(lower, ["eligible for a return and refund", "start a standard return"])) return false;
   if (scenario.key === "fresh_sandwich_change_mind" && includesAny(lower, ["eligible for a return and refund", "start a standard return", "can return it because"])) return false;
   const evidenceProvided = hasAnyValue(variables.evidence, ["photos provided", "photo provided", "packaging kept"]);

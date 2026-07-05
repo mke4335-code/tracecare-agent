@@ -20,20 +20,39 @@ export async function POST(request: Request) {
     }
 
     const serviceRequest = body.variables?.request || "Return & Refund";
-    const prefix = serviceRequest.toLowerCase().includes("compensation")
+    const requestLower = `${serviceRequest} ${body.nextAction || ""}`.toLowerCase();
+    const prefix = requestLower.includes("address")
+      ? "AC"
+      : requestLower.includes("photo") || requestLower.includes("evidence")
+      ? "EV"
+      : requestLower.includes("compensation")
       ? "CP"
-      : serviceRequest.toLowerCase().includes("safety") || body.nextAction?.toLowerCase().includes("human")
+      : requestLower.includes("safety") || requestLower.includes("human")
         ? "HS"
         : "RF";
     const requestId = `${prefix}-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-2048`;
-    const steps = serviceRequest.toLowerCase().includes("compensation")
+    const steps = requestLower.includes("address")
+      ? [
+          "Creating address change request",
+          "Checking dispatch status",
+          "Saving the new address for review",
+          "Notifying you of updates",
+        ]
+      : requestLower.includes("photo") || requestLower.includes("evidence")
+      ? [
+          "Opening evidence step",
+          "Checking required photo details",
+          "Saving evidence status",
+          "Notifying you of updates",
+        ]
+      : requestLower.includes("compensation")
       ? [
           "Creating compensation request",
           "Checking delivery timeline",
           "Sending request to seller",
           "Notifying you of updates",
         ]
-      : serviceRequest.toLowerCase().includes("safety") || body.nextAction?.toLowerCase().includes("human")
+      : requestLower.includes("safety") || requestLower.includes("human")
         ? [
             "Preparing support summary",
             "Attaching product safety sources",

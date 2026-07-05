@@ -2,6 +2,8 @@ export type ProductImage =
   | "glass-box"
   | "cookies"
   | "container-set"
+  | "coffee-maker"
+  | "protein-bar"
   | "yoghurt"
   | "sandwich"
   | "snack";
@@ -54,7 +56,7 @@ type Order = {
   customerId: string;
   productId: string;
   quantity: number;
-  status: "delivered" | "in_transit";
+  status: "processing" | "out_for_delivery" | "delivered" | "in_transit";
   deliveredDaysAgo: number;
   promisedDeliveryDaysAgo?: number;
   coldChainOk?: boolean;
@@ -79,6 +81,9 @@ type ExperimentTaskRecord = {
     | "snack_package_evidence_unclear"
     | "late_delivery_compensation"
     | "allergen_safety"
+    | "protein_bar_allergen_safety"
+    | "coffee_maker_address_change"
+    | "fresh_sandwich_address_change"
     | "missing_accessory"
     | "unknown";
   customerId: string;
@@ -202,6 +207,27 @@ export const traceguideProducts: Product[] = [
     policyTags: ["food_quality", "allergen"],
   },
   {
+    id: "prod-coffee-maker",
+    name: "Coffee Maker",
+    image: "coffee-maker",
+    detail: "1 item",
+    category: "homeware",
+    returnClass: "standard",
+    priceGbp: 49,
+    policyTags: ["address_change", "pre_dispatch"],
+  },
+  {
+    id: "prod-protein-bar",
+    name: "Protein Bar",
+    image: "protein-bar",
+    detail: "60g / bar",
+    category: "packaged_food",
+    returnClass: "food_quality_review",
+    priceGbp: 3,
+    allergens: ["peanut", "milk", "soy"],
+    policyTags: ["allergen", "product_safety"],
+  },
+  {
     id: "prod-chilled-yoghurt",
     name: "Chilled Yoghurt",
     image: "yoghurt",
@@ -262,6 +288,22 @@ export const traceguideOrders: Order[] = [
     deliveredDaysAgo: 2,
   },
   {
+    id: "TC-2152",
+    customerId: "cust-ke-demo",
+    productId: "prod-coffee-maker",
+    quantity: 1,
+    status: "processing",
+    deliveredDaysAgo: 0,
+  },
+  {
+    id: "TC-2166",
+    customerId: "cust-ke-demo",
+    productId: "prod-protein-bar",
+    quantity: 1,
+    status: "delivered",
+    deliveredDaysAgo: 1,
+  },
+  {
     id: "TC-2118",
     customerId: "cust-ke-demo",
     productId: "prod-glass-food-container",
@@ -275,7 +317,7 @@ export const traceguideOrders: Order[] = [
     customerId: "cust-ke-demo",
     productId: "prod-fresh-sandwich",
     quantity: 1,
-    status: "delivered",
+    status: "out_for_delivery",
     deliveredDaysAgo: 0,
   },
   {
@@ -318,6 +360,18 @@ export const traceguideEvidenceRecords: EvidenceRecord[] = [
     description: "Customer reported damage, but no photo evidence has been added yet.",
   },
   {
+    id: "ev-coffee-address",
+    orderId: "TC-2152",
+    status: "not_required",
+    description: "Address change can be prepared because the order has not been dispatched.",
+  },
+  {
+    id: "ev-protein-allergen",
+    orderId: "TC-2166",
+    status: "not_required",
+    description: "Product ingredient and allergen records are available for safety advice.",
+  },
+  {
     id: "ev-container-lid",
     orderId: "TC-2118",
     status: "photos_provided",
@@ -346,6 +400,28 @@ export const traceguideEvidenceRecords: EvidenceRecord[] = [
 export const traceguideExperimentTasks: ExperimentTaskRecord[] = [
   {
     id: "S1-T1",
+    scenarioKey: "allergen_safety",
+    customerId: "cust-ke-demo",
+    orderId: "TC-2104",
+    issueType: "Allergen concern",
+    requestType: "Product safety advice",
+    reason: "Customer is allergic to peanuts",
+    defaultEvidenceStatus: "not_required",
+    correctDecision: "Do not eat the product; use ingredient and allergen evidence, or contact human support if unsure.",
+  },
+  {
+    id: "S1-T2",
+    scenarioKey: "coffee_maker_address_change",
+    customerId: "cust-ke-demo",
+    orderId: "TC-2152",
+    issueType: "Delivery address change",
+    requestType: "Change delivery address",
+    reason: "Order has not been dispatched",
+    defaultEvidenceStatus: "not_required",
+    correctDecision: "Can prepare an address change request because the order has not been dispatched; user confirmation is required before submission.",
+  },
+  {
+    id: "S1-T3",
     scenarioKey: "glass_damaged_refund",
     customerId: "cust-ke-demo",
     orderId: "TC-2048",
@@ -353,51 +429,29 @@ export const traceguideExperimentTasks: ExperimentTaskRecord[] = [
     requestType: "Return & Refund",
     reason: "Item arrived damaged",
     defaultEvidenceStatus: "photos_provided",
-    correctDecision: "Can prepare refund request after confirmation.",
-  },
-  {
-    id: "S1-T2",
-    scenarioKey: "chilled_yoghurt_change_mind",
-    customerId: "cust-ke-demo",
-    orderId: "TC-2091",
-    issueType: "Change-of-mind chilled food return",
-    requestType: "Return & Refund",
-    reason: "Customer changed their mind",
-    defaultEvidenceStatus: "not_required",
-    correctDecision: "Do not authorise normal return; perishable exception applies unless quality issue exists.",
-  },
-  {
-    id: "S1-T3",
-    scenarioKey: "damaged_food_return",
-    customerId: "cust-ke-demo",
-    orderId: "TC-2104",
-    issueType: "Damaged food item",
-    requestType: "Return & Refund",
-    reason: "Food arrived damaged",
-    defaultEvidenceStatus: "not_added",
-    correctDecision: "Ask for photo evidence or human review before refund request.",
+    correctDecision: "Can prepare a refund request after confirmation.",
   },
   {
     id: "S2-T1",
-    scenarioKey: "glass_container_broken",
+    scenarioKey: "protein_bar_allergen_safety",
     customerId: "cust-ke-demo",
-    orderId: "TC-2118",
-    issueType: "Broken lid",
-    requestType: "Replacement or refund",
-    reason: "Lid was broken on arrival",
-    defaultEvidenceStatus: "photos_provided",
-    correctDecision: "Can prepare replacement or refund request after confirmation.",
+    orderId: "TC-2166",
+    issueType: "Allergen concern",
+    requestType: "Product safety advice",
+    reason: "Customer is allergic to peanuts",
+    defaultEvidenceStatus: "not_required",
+    correctDecision: "Do not eat the product; the product allergen record includes peanut risk, so user should not rely on a generic reassurance.",
   },
   {
     id: "S2-T2",
-    scenarioKey: "fresh_sandwich_change_mind",
+    scenarioKey: "fresh_sandwich_address_change",
     customerId: "cust-ke-demo",
     orderId: "TC-2122",
-    issueType: "Change-of-mind fresh food return",
-    requestType: "Return & Refund",
-    reason: "Customer changed their mind",
+    issueType: "Delivery address change",
+    requestType: "Change delivery address",
+    reason: "Order is already out for delivery",
     defaultEvidenceStatus: "not_required",
-    correctDecision: "Do not authorise normal return; fresh food exception applies unless quality issue exists.",
+    correctDecision: "Do not authorise a normal address change because the order is already out for delivery; send to human support if needed.",
   },
   {
     id: "S2-T3",
@@ -581,6 +635,10 @@ export function commerceContextToKnowledgeDocs(context: CommerceContext): Knowle
 }
 
 function orderStatusLabel(order: Order, product: Product) {
+  if (order.status === "processing") return "Not dispatched yet";
+  if (order.status === "out_for_delivery") return "Out for delivery";
+  if (order.status === "in_transit") return "In transit";
+
   if (product.category === "chilled_food" || product.category === "fresh_food") {
     return order.deliveredDaysAgo === 0 ? "Delivered today" : `Delivered ${order.deliveredDaysAgo} days ago`;
   }
