@@ -53,7 +53,7 @@ type ActionResponse = {
   steps: string[];
 };
 
-type SheetMode = "sourceOverview" | "sourcesUsed" | "sourceDetails" | "variables" | "ordinaryDetails" | null;
+type SheetMode = "sourceOverview" | "sourcesUsed" | "sourceDetails" | "variables" | "evidence" | "ordinaryDetails" | null;
 
 const defaultQuestion = "The glass lunch box arrived damaged. Can I return it?";
 
@@ -400,9 +400,9 @@ function inferLoadingSteps(prompt: string) {
 }
 
 function productImageSrc(product: ProductContext) {
-  if (product.image === "yoghurt") return "/traceguide-yoghurt.svg";
-  if (product.image === "sandwich") return "/traceguide-sandwich.svg";
-  if (product.image === "snack") return "/traceguide-snack.svg";
+  if (product.image === "yoghurt") return "/traceguide-yoghurt.jpg";
+  if (product.image === "sandwich") return "/traceguide-sandwich.jpg";
+  if (product.image === "snack") return "/traceguide-snack.jpg";
   if (product.image === "cookies") return "/traceguide-cookie.png";
   if (product.image === "container-set") return "/traceguide-container-set.png";
   return "/traceguide-glass-lunch-box.png";
@@ -620,7 +620,7 @@ export default function TraceGuideDemo() {
     setSelectedSource(source);
     setSheetMode("sourceOverview");
     logStudyEvent("source_anchor_opened", {
-      sourceNumber: source.number,
+      sourceIndex: source.number,
       sourceTitle: source.title,
       sourceCategory: source.category,
     });
@@ -846,7 +846,8 @@ export default function TraceGuideDemo() {
                                       });
 
                                       if (actionState.kind === "needs_evidence") {
-                                        setSheetMode("variables");
+                                        setVariables((current) => ({ ...current, evidence: "Photos provided" }));
+                                        setSheetMode("evidence");
                                       } else {
                                         void startRefundRequest("contact human support", actionState.primaryAction);
                                       }
@@ -946,6 +947,14 @@ export default function TraceGuideDemo() {
             )}
             {sheetMode === "variables" && (
               <VariablesSheet
+                variables={variables}
+                updateVariable={updateVariable}
+                onCancel={() => setSheetMode(null)}
+                onSave={saveAndRecheck}
+              />
+            )}
+            {sheetMode === "evidence" && (
+              <EvidenceSheet
                 variables={variables}
                 updateVariable={updateVariable}
                 onCancel={() => setSheetMode(null)}
@@ -1169,25 +1178,15 @@ function SourceOverview({
 }) {
   return (
     <>
-      <div className={styles.sheetTitleRow}>
-        <span className={styles.sheetIcon}>▤</span>
-        <div>
-          <h2>Source overview</h2>
-          <p>
-            You tapped: {source.category.toLowerCase()} <b>[{source.number}]</b>
-          </p>
-        </div>
-        <button className={styles.donePill} type="button" onClick={onDone}>
-          Done
-        </button>
+      <div className={styles.simpleSheetHeader}>
+        <h2>Source overview</h2>
+        <p>
+          You tapped: {source.category.toLowerCase()} <b>[{source.number}]</b>
+        </p>
       </div>
       <article className={styles.overviewSourceCard}>
-        <span className={styles.sourceNumber}>{source.number}</span>
-        <div>
-          <h3>{source.title}</h3>
-          <p>{shortExcerpt(source.excerpt, 150)}</p>
-          <em>{source.number <= 2 ? "Used in answer" : "Supporting source"}</em>
-        </div>
+        <h3>{source.title}</h3>
+        <p>{shortExcerpt(source.excerpt, 150)}</p>
       </article>
       <div className={styles.sheetActions}>
         <button className={styles.secondaryAction} type="button" onClick={onDetails}>
@@ -1214,9 +1213,6 @@ function SourcesUsed({ sources, onDone }: { sources: Source[]; onDone: () => voi
             <small>SOURCE {source.number}</small>
             <h3>{source.title}</h3>
             <p>{shortExcerpt(source.excerpt, 125)}</p>
-            <em className={source.relevance === "Medium relevance" ? styles.mediumTag : ""}>
-              {source.number <= 2 ? "Used in answer" : "Supporting source"}
-            </em>
           </article>
         ))}
       </div>
@@ -1245,6 +1241,43 @@ function SourceDetails({ source, onDone }: { source: Source; onDone: () => void 
       <button className={styles.fullWidthPrimary} type="button" onClick={onDone}>
         Done
       </button>
+    </>
+  );
+}
+
+function EvidenceSheet({
+  variables,
+  updateVariable,
+  onCancel,
+  onSave,
+}: {
+  variables: TraceVariables;
+  updateVariable: (key: keyof TraceVariables, value: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <>
+      <div className={styles.simpleSheetHeader}>
+        <h2>Add photo evidence</h2>
+        <p>Update the evidence status so the agent can recheck whether a request can be prepared.</p>
+      </div>
+      <div className={styles.variableList}>
+        <SelectField
+          label="Evidence"
+          value={variables.evidence}
+          options={["Photos provided", "Photos helpful", "Photo not added", "Packaging kept", "No quality issue reported", "Not sure"]}
+          onChange={(value) => updateVariable("evidence", value)}
+        />
+      </div>
+      <div className={styles.sheetActions}>
+        <button className={styles.secondaryAction} type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className={styles.primaryAction} type="button" onClick={onSave}>
+          Save and recheck
+        </button>
+      </div>
     </>
   );
 }

@@ -250,7 +250,7 @@
 .productCard img {
   width: 96px;
   height: 96px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 13px;
   background: #f4f6fb;
 }
@@ -696,17 +696,21 @@
 
 .quickReplies {
   display: flex;
-  gap: 15px;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: min(100%, 318px);
 }
 
 .quickReplies button {
   min-width: 72px;
   width: auto;
-  height: 36px;
-  padding: 0 16px;
+  min-height: 36px;
+  padding: 0 15px;
   border-radius: 10px;
   font-size: 15px;
+  line-height: 1.15;
   font-weight: 760;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -902,18 +906,6 @@
   margin-bottom: 24px;
 }
 
-.sheetIcon {
-  width: 45px;
-  height: 45px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: #efedff;
-  color: #2c20ff;
-  font-size: 24px;
-}
-
-.sheetTitleRow h2,
 .simpleSheetHeader h2 {
   margin: 0 0 11px;
   color: #070813;
@@ -922,7 +914,6 @@
   letter-spacing: -0.06em;
 }
 
-.sheetTitleRow p,
 .simpleSheetHeader p {
   margin: 0;
   color: #6d748a;
@@ -931,7 +922,7 @@
   font-weight: 560;
 }
 
-.sheetTitleRow b {
+.simpleSheetHeader b {
   color: #2c20ff;
 }
 
@@ -947,25 +938,10 @@
 }
 
 .overviewSourceCard {
-  display: grid;
-  grid-template-columns: 48px 1fr;
-  gap: 15px;
   padding: 21px 20px;
   border-radius: 16px;
   border: 1px solid #e4e7f1;
   background: #ffffff;
-}
-
-.sourceNumber {
-  width: 39px;
-  height: 39px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #5d50ff, #2718f0);
-  color: #ffffff;
-  font-size: 22px;
-  font-weight: 830;
 }
 
 .overviewSourceCard h3,
@@ -986,25 +962,6 @@
   font-size: 14px;
   line-height: 1.55;
   font-weight: 520;
-}
-
-.overviewSourceCard em,
-.sourceList em {
-  display: inline-flex;
-  width: fit-content;
-  margin-top: 17px;
-  padding: 6px 10px;
-  border-radius: 7px;
-  background: #dff6e9;
-  color: #079144;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 760;
-}
-
-.mediumTag {
-  background: #fff0da !important;
-  color: #ea7a18 !important;
 }
 
 .sheetActions {

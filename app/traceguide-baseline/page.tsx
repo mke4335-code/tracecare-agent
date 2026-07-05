@@ -111,9 +111,9 @@ const studyTasks: StudyTask[] = [
 ];
 
 function productImageSrc(product: ProductContext) {
-  if (product.image === "yoghurt") return "/traceguide-yoghurt.svg";
-  if (product.image === "sandwich") return "/traceguide-sandwich.svg";
-  if (product.image === "snack") return "/traceguide-snack.svg";
+  if (product.image === "yoghurt") return "/traceguide-yoghurt.jpg";
+  if (product.image === "sandwich") return "/traceguide-sandwich.jpg";
+  if (product.image === "snack") return "/traceguide-snack.jpg";
   if (product.image === "cookies") return "/traceguide-cookie.png";
   if (product.image === "container-set") return "/traceguide-container-set.png";
   return "/traceguide-glass-lunch-box.png";
