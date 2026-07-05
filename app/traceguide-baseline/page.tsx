@@ -236,7 +236,7 @@ function actionStateForResponse(response: BaselineResponse): ActionState {
   if (lower.includes("human") || lower.includes("review")) {
     return {
       kind: "needs_human_review",
-      label: "Review needed",
+      label: "Human support",
       prompt: "Would you like me to connect you to human support?",
       primaryAction: "Yes",
       secondaryAction: "No",
@@ -363,10 +363,10 @@ export default function TraceGuideBaseline() {
         nextAction: "contact human support",
         actionState: {
           kind: "needs_human_review",
-          label: "Review needed",
-          prompt: "This case needs human review before a request can be started.",
-          primaryAction: "Talk to human",
-          secondaryAction: "Ask another question",
+          label: "Human support",
+          prompt: "Would you like me to connect you to human support?",
+          primaryAction: "Yes",
+          secondaryAction: "No",
           canStartRequest: false,
         },
         product: inferProductFromQuestion(trimmed),

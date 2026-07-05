@@ -1042,9 +1042,9 @@ function actionStateFor(scenario: Scenario, assessment: VariableAssessment): Act
     return {
       kind: "needs_evidence",
       label: "Photo needed",
-      prompt: "Please add a photo before I prepare the request.",
-      primaryAction: "I have a photo",
-      secondaryAction: "Talk to human",
+      prompt: "Would you like to add photo evidence now?",
+      primaryAction: "Yes",
+      secondaryAction: "No",
       canStartRequest: false,
     };
   }
@@ -1052,10 +1052,10 @@ function actionStateFor(scenario: Scenario, assessment: VariableAssessment): Act
   if (/human_review|boundary_exception/.test(taskType) || /human support|review/.test(nextAction)) {
     return {
       kind: "needs_human_review",
-      label: "Review needed",
-      prompt: "This case needs human review before a request can be started.",
-      primaryAction: "Talk to human",
-      secondaryAction: "Ask another question",
+      label: "Human support",
+      prompt: "Would you like me to connect you to human support?",
+      primaryAction: "Yes",
+      secondaryAction: "No",
       canStartRequest: false,
     };
   }

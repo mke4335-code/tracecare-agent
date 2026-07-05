@@ -389,7 +389,7 @@ function actionStateForResponse(response: TraceResponse): ActionState {
   if (lower.includes("human") || lower.includes("review")) {
     return {
       kind: "needs_human_review",
-      label: "Review needed",
+      label: "Human support",
       prompt: "Would you like me to connect you to human support?",
       primaryAction: "Yes",
       secondaryAction: "No",
