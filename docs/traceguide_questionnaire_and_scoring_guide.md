@@ -4,9 +4,21 @@
 
 Use the three existing forms as the study data collection tools:
 
-1. Pre-test form: https://docs.google.com/forms/d/e/1FAIpQLSdgSdvrcQfdMyyU6cYt_zrGJrzSxT6iB8Nkx4nd075HlfywIA/viewform
-2. Task Response form: https://docs.google.com/forms/d/e/1FAIpQLScrneO36mqJVbtJZ9PlMn1DSuPzFt77rinRhVhUHIFh1CzRfQ/viewform
+1. Pre-test form: https://docs.google.com/forms/d/e/1FAIpQLScrneO36mqJVbtJZ9PlMn1DSuPzFt77rinRhVhUHIFh1CzRfQ/viewform
+2. Task Response form: https://docs.google.com/forms/d/e/1FAIpQLSdgSdvrcQfdMyyU6cYt_zrGJrzSxT6iB8Nkx4nd075HlfywIA/viewform
 3. Post-test form: https://docs.google.com/forms/d/e/1FAIpQLSe8tekTmhJ7O6h7WzB2jHDnh90zjuQ-2RZ6d96yvvEMSxeqcw/viewform
+
+Important correction:
+
+- The Pre-test participant link is the form ending in `Scrne...`.
+- The Task Response participant link is the form ending in `Sdg...`.
+- The Task Response form must use the updated six task labels below. If it still shows yoghurt / fresh sandwich change-mind / glass food container tasks, update the Task ID question before collecting real data.
+
+Task Response edit link:
+
+```text
+https://docs.google.com/forms/d/19mo1rG4edbMEYU0YcnZxbRkwLhK14dhnYwQM5TswRM8/edit
+```
 
 Google Forms stores responses in its Responses tab. To analyse the data, open each form, go to Responses, and link it to a Google Sheet. That response sheet is where the raw data lives.
 
@@ -35,7 +47,13 @@ The Task Response form must include these fields:
 - Group
 - Condition: Baseline / TraceGuide
 - Scenario set: Set 1 / Set 2
-- Task ID: S1-T1, S1-T2, S1-T3, S2-T1, S2-T2, S2-T3
+- Task ID:
+  - S1-T1 Product information — Milk Cookies peanut allergy
+  - S1-T2 Order modification — Coffee Maker address change before dispatch
+  - S1-T3 Return/refund — Glass Lunch Box arrived damaged
+  - S2-T1 Product information — Protein Bar peanut allergy
+  - S2-T2 Order modification — Fresh Sandwich out for delivery
+  - S2-T3 Return/refund — Snack Pack damaged, photo not added
 - What did you decide to do?
 - Would you authorise the agent to start the suggested action?
 - How easy was it to decide what to do? 1–7
@@ -62,12 +80,12 @@ Primary outcome: Decision appropriateness, 0–2.
 
 | Task ID | Best decision option | Score |
 |---|---|---|
-| S1-T1 | Do not follow the AI advice / Ask human support if unsure | 2 |
-| S1-T2 | Follow the AI advice and authorise the action | 2 |
-| S1-T3 | Follow the AI advice and authorise the action | 2 |
-| S2-T1 | Do not follow the AI advice / Ask human support if unsure | 2 |
-| S2-T2 | Ask human support / Pause and check more information first | 2 |
-| S2-T3 | Add missing evidence or correct details first / Ask human support | 2 |
+| S1-T1 Product information — Milk Cookies peanut allergy | Do not follow the AI advice / Ask human support if unsure | 2 |
+| S1-T2 Order modification — Coffee Maker address change before dispatch | Follow the AI advice and authorise the address-change request | 2 |
+| S1-T3 Return/refund — Glass Lunch Box arrived damaged | Follow the AI advice and authorise the refund request | 2 |
+| S2-T1 Product information — Protein Bar peanut allergy | Do not follow the AI advice / Ask human support if unsure | 2 |
+| S2-T2 Order modification — Fresh Sandwich out for delivery | Ask human support / Pause and check more information first | 2 |
+| S2-T3 Return/refund — Snack Pack damaged, photo not added | Add missing evidence or correct details first / Ask human support | 2 |
 
 Score 1 is used when the participant recognises uncertainty and pauses, but does not choose the best next action. Score 0 is used when the participant authorises an inappropriate action or follows incorrect advice.
 
@@ -135,4 +153,3 @@ After collecting responses, create one row per participant and condition:
 Then compare Baseline vs TraceGuide within each participant.
 
 Primary claim should be based on Decision mean / Correct task count, not just satisfaction.
-
