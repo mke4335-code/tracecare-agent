@@ -26,7 +26,7 @@ Remove old address-change, yoghurt, sandwich and six-task options before collect
 Each block response should include:
 
 - Participant code.
-- Sequence group: G1 or G2.
+- Sequence group: Group 1 or Group 2.
 - Condition: A — Baseline AI customer service / B — TraceGuide Agent.
 - Scenario set: Set 1 / Set 2.
 - Task 1 ID.

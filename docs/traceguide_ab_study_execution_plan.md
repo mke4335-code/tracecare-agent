@@ -32,8 +32,8 @@ Use two groups.
 
 | Group | First block | Second block |
 |---|---|---|
-| G1 | Baseline + Set 1 | TraceGuide + Set 2 |
-| G2 | TraceGuide + Set 1 | Baseline + Set 2 |
+| Group 1 | Baseline + Set 1 | TraceGuide + Set 2 |
+| Group 2 | TraceGuide + Set 1 | Baseline + Set 2 |
 
 This means each participant fills the Version Block Survey twice: once after completing the two tasks in Baseline, and once after completing the two tasks in TraceGuide.
 

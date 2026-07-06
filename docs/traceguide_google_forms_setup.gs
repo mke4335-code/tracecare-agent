@@ -98,8 +98,8 @@ function setupVersionBlockSurveyForm() {
 
   addText(form, 'Participant code', 'Use the same code throughout the study.', true);
   addMultipleChoice(form, 'Sequence group', [
-    'G1 — A Set 1 → B Set 2',
-    'G2 — B Set 1 → A Set 2',
+    'Group 1 — Baseline Set 1 → TraceGuide Set 2',
+    'Group 2 — TraceGuide Set 1 → Baseline Set 2',
     'Not sure'
   ], true);
   addMultipleChoice(form, 'Condition', ['A — Baseline AI customer service', 'B — TraceGuide Agent'], true);
@@ -150,8 +150,8 @@ function setupPostTestForm() {
 
   addText(form, 'Participant code', 'Use the same code throughout the study.', true);
   addMultipleChoice(form, 'Sequence group', [
-    'G1 — A Set 1 → B Set 2',
-    'G2 — B Set 1 → A Set 2',
+    'Group 1 — Baseline Set 1 → TraceGuide Set 2',
+    'Group 2 — TraceGuide Set 1 → Baseline Set 2',
     'Not sure'
   ], true);
 
@@ -190,8 +190,8 @@ function setupScoringWorkbook() {
 
   upsertSheet(ss, 'Participant Groups', [
     ['Group', 'Order', 'First condition tasks', 'Second condition tasks', 'Participant codes'],
-    ['G1', 'A Set 1 → B Set 2', 'A: S1-T1, S1-T2', 'B: S2-T1, S2-T2', 'P01, P03, P05, P07, P09, P11, P13, P15, P17, P19'],
-    ['G2', 'B Set 1 → A Set 2', 'B: S1-T1, S1-T2', 'A: S2-T1, S2-T2', 'P02, P04, P06, P08, P10, P12, P14, P16, P18, P20']
+    ['Group 1', 'Baseline Set 1 → TraceGuide Set 2', 'Baseline: S1-T1, S1-T2', 'TraceGuide: S2-T1, S2-T2', 'P01, P03, P05, P07, P09, P11, P13, P15, P17, P19'],
+    ['Group 2', 'TraceGuide Set 1 → Baseline Set 2', 'TraceGuide: S1-T1, S1-T2', 'Baseline: S2-T1, S2-T2', 'P02, P04, P06, P08, P10, P12, P14, P16, P18, P20']
   ]);
 
   upsertSheet(ss, 'Scoring Notes', [

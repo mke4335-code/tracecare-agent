@@ -58,8 +58,8 @@ Because the final study has two prototype versions, each participant submits thi
 
 ## Group assignment
 
-- G1: Baseline + Set 1, then TraceGuide + Set 2.
-- G2: TraceGuide + Set 1, then Baseline + Set 2.
+- Group 1: Baseline + Set 1, then TraceGuide + Set 2.
+- Group 2: TraceGuide + Set 1, then Baseline + Set 2.
 
 ## Why this matters
 
