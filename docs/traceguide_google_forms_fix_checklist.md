@@ -1,91 +1,66 @@
-# TraceGuide Google Forms Fix Checklist
+# TraceGuide Google Forms Final Checklist
 
-Use this checklist before sending the forms to participants.
+Use this checklist before sending the study links to participants.
 
-## Correct participant links
+## Participant links
 
 1. Pre-test:
    https://docs.google.com/forms/d/e/1FAIpQLScrneO36mqJVbtJZ9PlMn1DSuPzFt77rinRhVhUHIFh1CzRfQ/viewform
 
-2. Task Response:
+2. Version Block Survey:
    https://docs.google.com/forms/d/e/1FAIpQLSdgSdvrcQfdMyyU6cYt_zrGJrzSxT6iB8Nkx4nd075HlfywIA/viewform
 
 3. Post-test:
    https://docs.google.com/forms/d/e/1FAIpQLSe8tekTmhJ7O6h7WzB2jHDnh90zjuQ-2RZ6d96yvvEMSxeqcw/viewform
 
-## Task Response form edit link
-
-Open:
+## Version Block Survey edit link
 
 ```text
 https://docs.google.com/forms/d/19mo1rG4edbMEYU0YcnZxbRkwLhK14dhnYwQM5TswRM8/edit
 ```
 
-## Fix the Task ID question
+## Required Task ID options
 
-Replace the old options with exactly these six options:
+Replace old options with exactly these four:
 
 1. `S1-T1 Product information — Milk Cookies peanut allergy`
-2. `S1-T2 Order modification — Coffee Maker address change before dispatch`
-3. `S1-T3 Return/refund — Glass Lunch Box arrived damaged`
-4. `S2-T1 Product information — Protein Bar peanut allergy`
-5. `S2-T2 Order modification — Fresh Sandwich out for delivery`
-6. `S2-T3 Return/refund — Snack Pack damaged, photo not added`
+2. `S1-T2 Return/refund — Glass Lunch Box arrived damaged`
+3. `S2-T1 Product information — Protein Bar peanut allergy`
+4. `S2-T2 Return/refund — Snack Package damaged, photo not added`
 
-Remove old options such as:
+Delete any old options such as address change, chilled yoghurt, fresh sandwich, glass food container, or any `S1-T3` / `S2-T3` task.
 
-- `S1-T1 Glass Lunch Box arrived damaged`
-- `S1-T2 Chilled Yoghurt unopened but changed mind`
-- `S1-T3 Milk Cookies arrived damaged but no photo added`
-- `S2-T1 Glass Food Container lid broken`
-- `S2-T2 Fresh Sandwich unopened but changed mind`
-- `S2-T3 Snack package damaged but evidence unclear`
+## Required next-step questions
 
-## Fix the final decision options
+Question:
 
-Use these exact options:
+> Based on what you saw, what would you do next?
 
-1. `Follow the AI advice and authorise the action`
-2. `Follow the advice but do not authorise an action yet`
-3. `Pause and check more information first`
-4. `Add missing evidence or correct details first`
-5. `Ask human support`
-6. `Do not follow the AI advice`
+Options:
 
-These options match the scoring workbook.
+1. `I would follow the AI advice and not eat the product.`
+2. `I would still eat the product.`
+3. `I would authorise the agent to prepare the request.`
+4. `I would add photo/evidence first.`
+5. `I would check more information first.`
+6. `I would ask human support.`
+7. `I would not continue with the request.`
+8. `I am not sure.`
 
-## Keep these existing fields
+## Participant use
 
-Do not delete these fields:
+Each participant fills the Version Block Survey once after completing two tasks in one prototype version.
 
-- Participant code
-- Condition
-- Scenario set
-- Task ID
-- Would you authorise the agent to start the suggested request?
-- How confident are you in your decision for this task?
-- What action do you think the agent was preparing to take?
-- What information most influenced your decision?
-- Was anything unclear or missing in this task?
-- ASQ 1
-- ASQ 2
-- ASQ 3
+Because the final study has two prototype versions, each participant submits this form twice:
 
-## How participants should use the Task Response form
+- Once after the first prototype version.
+- Once after the second prototype version.
 
-Each participant fills the Task Response form once after each prototype task.
+## Group assignment
 
-Because each participant completes six tasks, each participant should submit this form six times.
-
-Example:
-
-- P01 completes Baseline Task 1 → fills Task Response once.
-- P01 completes Baseline Task 2 → fills Task Response once.
-- P01 completes Baseline Task 3 → fills Task Response once.
-- P01 completes TraceGuide Task 1 → fills Task Response once.
-- P01 completes TraceGuide Task 2 → fills Task Response once.
-- P01 completes TraceGuide Task 3 → fills Task Response once.
+- G1: Baseline + Set 1, then TraceGuide + Set 2.
+- G2: TraceGuide + Set 1, then Baseline + Set 2.
 
 ## Why this matters
 
-The Task ID labels must match the updated prototypes. Otherwise the response spreadsheet will mix old yoghurt / glass container tasks with the new product information, order modification, and refund tasks, making the decision scores invalid.
+The Task ID labels, prototype tasks and scoring key must match. If old six-task labels remain in the form, the response spreadsheet will mix incompatible scenarios and the decision-appropriateness scores will become invalid.

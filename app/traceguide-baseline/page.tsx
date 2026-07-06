@@ -1,8 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import styles from "../traceguide-demo/traceguide-demo.module.css";
+import {
+  getTraceguideStudyTask,
+  orderedTraceguideTasks,
+  type TraceguideStudyTask,
+} from "../../lib/traceguide-study-config";
 
 type ProductContext = {
   name: string;
@@ -10,14 +15,6 @@ type ProductContext = {
   detail: string;
   status: string;
   linkLabel: string;
-};
-
-type StudyTask = {
-  id: string;
-  set: "1" | "2";
-  category: "Product information decision" | "Order modification decision" | "Return/refund decision";
-  label: string;
-  text: string;
 };
 
 type TraceVariables = {
@@ -38,7 +35,6 @@ type ActionState = {
 
 type BaselineResponse = {
   answer: string;
-  confidence?: number;
   variables: TraceVariables;
   nextAction: string;
   actionState?: ActionState;
@@ -62,129 +58,36 @@ const defaultVariables: TraceVariables = {
   issueIdentified: "Damaged item",
   request: "Return & Refund",
   reason: "Item arrived damaged",
-  evidence: "Photos needed",
+  evidence: "Photos provided",
 };
 
-const studyTasks: StudyTask[] = [
-  {
-    id: "S1-T1",
-    set: "1",
-    category: "Product information decision",
-    label: "Peanut allergy: cookies",
-    text: "I’m allergic to peanuts. Can I eat these milk cookies?",
-  },
-  {
-    id: "S1-T2",
-    set: "1",
-    category: "Order modification decision",
-    label: "Change address before dispatch",
-    text: "Can I change the delivery address for my coffee maker before it is shipped?",
-  },
-  {
-    id: "S1-T3",
-    set: "1",
-    category: "Return/refund decision",
-    label: "Damaged lunch box",
-    text: "The glass lunch box arrived damaged. Can I return it?",
-  },
-  {
-    id: "S2-T1",
-    set: "2",
-    category: "Product information decision",
-    label: "Peanut allergy: protein bar",
-    text: "I’m allergic to peanuts. Can I eat this protein bar?",
-  },
-  {
-    id: "S2-T2",
-    set: "2",
-    category: "Order modification decision",
-    label: "Change address after dispatch",
-    text: "My fresh sandwich is already out for delivery. Can I change the delivery address?",
-  },
-  {
-    id: "S2-T3",
-    set: "2",
-    category: "Return/refund decision",
-    label: "Snack package damaged",
-    text: "The snack package arrived damaged, but I have not added a photo yet. Can I get a refund?",
-  },
-];
+function includesAny(text: string, terms: string[]) {
+  const lower = text.toLowerCase();
+  return terms.some((term) => lower.includes(term.toLowerCase()));
+}
 
 function productImageSrc(product: ProductContext) {
-  if (product.image === "coffee-maker") return "/traceguide-coffee-maker.jpg";
   if (product.image === "protein-bar") return "/traceguide-protein-bar.jpg";
-  if (product.image === "yoghurt") return "/traceguide-yoghurt.jpg";
-  if (product.image === "sandwich") return "/traceguide-sandwich.jpg";
   if (product.image === "snack") return "/traceguide-snack.jpg";
   if (product.image === "cookies") return "/traceguide-cookie.png";
   if (product.image === "container-set") return "/traceguide-container-set.png";
   return "/traceguide-glass-lunch-box.png";
 }
 
-function stripEvidenceFeatures(answer: string) {
-  return answer
-    .replace(/\s*\[\d+\]/g, "")
-    .replace(/\*\*/g, "")
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/\n[ \t]+/g, "\n")
-    .trim();
-}
-
-function formatBaselineAnswer(answer: string) {
-  const cleaned = stripEvidenceFeatures(answer);
-  if (cleaned.includes("\n\n")) return cleaned.split("\n\n");
-
-  const splitIndex = cleaned.search(/\.\s+[A-Z]/);
-  if (splitIndex === -1) return [cleaned];
-
-  return [cleaned.slice(0, splitIndex + 1), cleaned.slice(splitIndex + 2)];
-}
-
 function inferProductFromQuestion(question: string): ProductContext {
-  const q = question.toLowerCase();
-  if (q.includes("protein bar")) {
+  if (includesAny(question, ["protein bar", "蛋白棒"])) {
     return {
       name: "Protein Bar",
       image: "protein-bar",
       detail: "60g / bar",
-      status: "Delivered yesterday",
+      status: "Product information available",
       linkLabel: "Product details",
     };
   }
 
-  if (q.includes("coffee maker") || q.includes("coffee machine")) {
+  if (includesAny(question, ["snack", "package damaged", "零食", "包装"])) {
     return {
-      name: "Coffee Maker",
-      image: "coffee-maker",
-      detail: "1 item",
-      status: "Not dispatched yet",
-      linkLabel: "Order details",
-    };
-  }
-
-  if (q.includes("yoghurt") || q.includes("yogurt") || q.includes("chilled")) {
-    return {
-      name: "Chilled Yoghurt",
-      image: "yoghurt",
-      detail: "4 x 125g",
-      status: "Delivered today",
-      linkLabel: "Product details",
-    };
-  }
-
-  if (q.includes("sandwich")) {
-    return {
-      name: "Fresh Sandwich",
-      image: "sandwich",
-      detail: "1 pack",
-      status: q.includes("address") || q.includes("out for delivery") ? "Out for delivery" : "Delivered today",
-      linkLabel: q.includes("address") || q.includes("out for delivery") ? "Delivery details" : "Product details",
-    };
-  }
-
-  if (q.includes("snack") || q.includes("package damaged")) {
-    return {
-      name: "Snack Pack",
+      name: "Snack Package",
       image: "snack",
       detail: "6-pack",
       status: "Delivered yesterday",
@@ -192,34 +95,37 @@ function inferProductFromQuestion(question: string): ProductContext {
     };
   }
 
-  if (q.includes("cookie") || q.includes("food") || q.includes("peanut") || q.includes("allergen")) {
+  if (includesAny(question, ["cookie", "cookies", "peanut", "allergic", "过敏", "花生"])) {
     return {
       name: "Milk Cookies",
       image: "cookies",
       detail: "100g / pack",
-      status: q.includes("peanut") || q.includes("allergen")
-        ? "Product information available"
-        : "Delivered 2 days ago",
+      status: "Product information available",
       linkLabel: "Product details",
-    };
-  }
-
-  if (q.includes("late") || q.includes("compensation") || q.includes("missing") || q.includes("accessory")) {
-    return {
-      name: "Glass Food Containers Set",
-      image: "container-set",
-      detail: "4-piece set",
-      status: q.includes("late") || q.includes("compensation") ? "Arrived 2 days late" : "Delivered today",
-      linkLabel: q.includes("late") || q.includes("compensation") ? "Delivery details" : "Order details",
     };
   }
 
   return defaultProduct;
 }
 
+function stripEvidenceFeatures(answer: string) {
+  return answer
+    .replace(/\s*\[\d+\]/g, "")
+    .replace(/\*\*/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function formatBaselineAnswer(answer: string) {
+  const cleaned = stripEvidenceFeatures(answer);
+  if (cleaned.includes("\n\n")) return cleaned.split("\n\n").filter(Boolean);
+  const splitIndex = cleaned.search(/\.\s+[A-Z]/);
+  if (splitIndex === -1) return [cleaned];
+  return [cleaned.slice(0, splitIndex + 1), cleaned.slice(splitIndex + 2)];
+}
+
 function actionStateForResponse(response: BaselineResponse): ActionState {
   if (response.actionState) return response.actionState;
-
   const lower = response.nextAction.toLowerCase();
 
   if (lower.includes("photo") || lower.includes("evidence")) {
@@ -233,7 +139,7 @@ function actionStateForResponse(response: BaselineResponse): ActionState {
     };
   }
 
-  if (lower.includes("human") || lower.includes("review")) {
+  if (lower.includes("human") || lower.includes("review") || lower.includes("support")) {
     return {
       kind: "needs_human_review",
       label: "Human support",
@@ -257,7 +163,8 @@ function actionStateForResponse(response: BaselineResponse): ActionState {
 export default function TraceGuideBaseline() {
   const [participantCode, setParticipantCode] = useState("");
   const [clientSessionId, setClientSessionId] = useState("");
-  const [activeTask, setActiveTask] = useState<StudyTask | null>(null);
+  const [assignedTask, setAssignedTask] = useState<TraceguideStudyTask | null>(null);
+  const [activeTask, setActiveTask] = useState<TraceguideStudyTask | null>(null);
   const [phase, setPhase] = useState<"idle" | "loading" | "answer" | "action">("idle");
   const [question, setQuestion] = useState("");
   const [inputValue, setInputValue] = useState("");
@@ -270,25 +177,17 @@ export default function TraceGuideBaseline() {
   const [showOrdinaryDetails, setShowOrdinaryDetails] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const actionSteps = useMemo(
-    () =>
-      action?.steps || [
-        "Creating request",
-        "Adding details",
-        "Sending to seller",
-        "Notifying you of updates",
-      ],
-    [action]
-  );
+  const visibleTasks = useMemo(() => orderedTraceguideTasks(assignedTask?.id), [assignedTask]);
+  const actionSteps = action?.steps || ["Creating request", "Adding details", "Sending to seller", "Notifying you of updates"];
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const participant = params.get("pid") || params.get("participant") || "";
-    const taskId = params.get("task") || params.get("taskId") || "";
-    const nextTask = studyTasks.find((task) => task.id.toLowerCase() === taskId.toLowerCase()) || null;
+    const task = getTraceguideStudyTask(params.get("task") || params.get("taskId"));
     setParticipantCode(participant);
+    setAssignedTask(task);
+    setActiveTask(task);
     setClientSessionId(window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-    if (nextTask) setActiveTask(nextTask);
   }, []);
 
   function logStudyEvent(eventName: string, payload: Record<string, unknown> = {}) {
@@ -307,13 +206,25 @@ export default function TraceGuideBaseline() {
     }).catch((error) => console.warn("Study event was not saved", error));
   }
 
-  async function askAgent(nextQuestion: string, taskOverride?: StudyTask | null) {
+  function resetToTasks() {
+    setPhase("idle");
+    setQuestion("");
+    setInputValue("");
+    setResponse(null);
+    setAction(null);
+    setActionStep(0);
+    setShowOrdinaryDetails(false);
+    setActiveTask(assignedTask);
+    logStudyEvent("returned_to_task_selection");
+  }
+
+  async function askAgent(nextQuestion: string, taskOverride?: TraceguideStudyTask | null) {
     const trimmed = nextQuestion.trim();
     if (!trimmed) return;
-    const taskForRun = taskOverride === null ? null : taskOverride ?? activeTask;
+    const taskForRun = taskOverride === undefined ? activeTask : taskOverride;
 
     setQuestion(trimmed);
-    if (taskOverride) setActiveTask(taskOverride);
+    setActiveTask(taskForRun || null);
     setProduct(inferProductFromQuestion(trimmed));
     setResponse(null);
     setAction(null);
@@ -327,11 +238,16 @@ export default function TraceGuideBaseline() {
     });
 
     try {
-      const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 1100));
+      const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 900));
       const apiRequest = fetch("/api/traceguide-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmed, taskId: taskForRun?.id }),
+        body: JSON.stringify({
+          question: trimmed,
+          taskId: taskForRun?.id,
+          participantCode,
+          condition: "baseline",
+        }),
       });
       const [apiResponse] = await Promise.all([apiRequest, minimumDelay]);
       const result = await apiResponse.json();
@@ -351,14 +267,13 @@ export default function TraceGuideBaseline() {
         question: trimmed,
         taskId: taskForRun?.id,
         scenario: result.scenario,
-        answer: result.answer,
+        answer: stripEvidenceFeatures(result.answer || ""),
         usedLLM: result.usedLLM,
       });
     } catch (error) {
       console.error(error);
       setResponse({
-        answer:
-          "I can help with this order, but I need a little more information before I prepare a support request.",
+        answer: "I can help with this, but I need a little more information before preparing a support request.",
         variables: defaultVariables,
         nextAction: "contact human support",
         actionState: {
@@ -378,9 +293,10 @@ export default function TraceGuideBaseline() {
 
   function submitQuestion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setActiveTask(null);
-    void askAgent(inputValue, null);
+    const trimmed = inputValue.trim();
+    if (!trimmed) return;
     setInputValue("");
+    void askAgent(trimmed, null);
   }
 
   async function startRequest(nextActionOverride = response?.nextAction, replyLabel = "Yes") {
@@ -427,15 +343,15 @@ export default function TraceGuideBaseline() {
   }
 
   return (
-    <main className={`${styles.page} notranslate`} translate="no">
+    <main className={styles.page}>
       <section className={styles.phone} aria-label="Baseline AI customer support mobile demo">
         <StatusBar />
         <header className={styles.nav}>
-          <button className={styles.backButton} type="button" aria-label="Go back">
+          <button className={styles.backButton} type="button" aria-label="Back to task selection" onClick={resetToTasks}>
             ‹
           </button>
           <h1>AI Support</h1>
-          <button className={styles.humanButton} type="button">
+          <button className={styles.humanButton} type="button" onClick={() => logStudyEvent("human_clicked")}>
             Human
           </button>
         </header>
@@ -445,12 +361,14 @@ export default function TraceGuideBaseline() {
             <AssistantRow>
               <article className={styles.welcomeCard}>
                 <h2>Hi, I’m AI Support.</h2>
-                <p>I can answer questions about your order and help start a support request.</p>
+                <p>Choose a study task below, or type your own e-commerce support question.</p>
                 <div className={styles.suggestionGrid} aria-label="Suggested questions">
-                  {(activeTask ? [activeTask] : studyTasks).map((item) => (
-                    <button key={item.id} type="button" onClick={() => askAgent(item.text, item)}>
-                      <span>{item.label}</span>
-                      {item.text}
+                  {visibleTasks.map((item) => (
+                    <button key={item.id} type="button" onClick={() => askAgent(item.prompt, item)}>
+                      <span>
+                        {item.id} · {item.label}
+                      </span>
+                      {item.prompt}
                     </button>
                   ))}
                 </div>
@@ -487,70 +405,34 @@ export default function TraceGuideBaseline() {
               <AssistantRow>
                 <article className={styles.baselineAnswerCard}>
                   {formatBaselineAnswer(response.answer).map((paragraph, index) =>
-                      index === 0 ? (
-                        <strong key={paragraph}>{paragraph}</strong>
-                      ) : (
-                        <p key={paragraph}>{paragraph}</p>
-                      )
-                    )}
+                    index === 0 ? <strong key={`${paragraph}-${index}`}>{paragraph}</strong> : <p key={`${paragraph}-${index}`}>{paragraph}</p>
+                  )}
                 </article>
               </AssistantRow>
 
               {phase === "answer" && (
                 <AssistantRow compact>
-                  <div>
-                    {(() => {
-                      const actionState = actionStateForResponse(response);
-
-                      return (
-                        <>
-                          <div className={styles.askBubble}>{actionState.prompt}</div>
-                          <div className={styles.quickReplies}>
-                            <button
-                              type="button"
-                              onClick={
-                                actionState.canStartRequest
-                                  ? () => startRequest()
-                                  : () => {
-                                      logStudyEvent("action_primary_clicked", {
-                                        actionState: actionState.kind,
-                                        nextAction: response.nextAction,
-                                      });
-
-                                      if (actionState.kind === "needs_human_review") {
-                                        void startRequest("contact human support", actionState.primaryAction);
-                                        return;
-                                      }
-
-                                      if (actionState.kind === "needs_evidence") {
-                                        void startRequest("add photo evidence", actionState.primaryAction);
-                                        return;
-                                      }
-
-                                      inputRef.current?.focus();
-                                    }
-                              }
-                            >
-                              {actionState.primaryAction}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                logStudyEvent("action_secondary_clicked", {
-                                  actionState: actionState.kind,
-                                  nextAction: response.nextAction,
-                                });
-
-                                inputRef.current?.focus();
-                              }}
-                            >
-                              {actionState.secondaryAction}
-                            </button>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
+                  <ActionPrompt
+                    actionState={actionStateForResponse(response)}
+                    onPrimary={(actionState) => {
+                      logStudyEvent("action_primary_clicked", {
+                        actionState: actionState.kind,
+                        nextAction: response.nextAction,
+                      });
+                      if (actionState.kind === "informational") {
+                        inputRef.current?.focus();
+                        return;
+                      }
+                      void startRequest(actionState.canStartRequest ? response.nextAction : actionState.label.toLowerCase(), actionState.primaryAction);
+                    }}
+                    onSecondary={(actionState) => {
+                      logStudyEvent("action_secondary_clicked", {
+                        actionState: actionState.kind,
+                        nextAction: response.nextAction,
+                      });
+                      inputRef.current?.focus();
+                    }}
+                  />
                 </AssistantRow>
               )}
             </>
@@ -574,9 +456,7 @@ export default function TraceGuideBaseline() {
                       </div>
                     ))}
                   </div>
-                  {actionStep >= actionSteps.length - 1 && (
-                    <p className={styles.requestId}>Request ID: {action?.requestId || "BASELINE-DEMO"}</p>
-                  )}
+                  {actionStep >= actionSteps.length - 1 && <p className={styles.requestId}>Request ID: {action?.requestId || "BASELINE-DEMO"}</p>}
                 </article>
               </AssistantRow>
             </>
@@ -604,11 +484,7 @@ export default function TraceGuideBaseline() {
         <div className={styles.sheetBackdrop} onClick={() => setShowOrdinaryDetails(false)}>
           <section className={styles.sheet} onClick={(event) => event.stopPropagation()}>
             <div className={styles.handle} />
-            <OrdinaryDetailsSheet
-              product={product}
-              variables={variables}
-              onDone={() => setShowOrdinaryDetails(false)}
-            />
+            <OrdinaryDetailsSheet product={product} variables={variables} onDone={() => setShowOrdinaryDetails(false)} />
           </section>
         </div>
       )}
@@ -646,13 +522,7 @@ function UserQuestion({ question }: { question: string }) {
   );
 }
 
-function ProductCard({
-  product,
-  onOpenDetails,
-}: {
-  product: ProductContext;
-  onOpenDetails: () => void;
-}) {
+function ProductCard({ product, onOpenDetails }: { product: ProductContext; onOpenDetails: () => void }) {
   return (
     <article className={styles.productCard}>
       <Image src={productImageSrc(product)} alt={product.name} width={320} height={320} priority />
@@ -672,15 +542,31 @@ function ProductCard({
   );
 }
 
-function OrdinaryDetailsSheet({
-  product,
-  variables,
-  onDone,
+function ActionPrompt({
+  actionState,
+  onPrimary,
+  onSecondary,
 }: {
-  product: ProductContext;
-  variables: TraceVariables;
-  onDone: () => void;
+  actionState: ActionState;
+  onPrimary: (actionState: ActionState) => void;
+  onSecondary: (actionState: ActionState) => void;
 }) {
+  return (
+    <div>
+      <div className={styles.askBubble}>{actionState.prompt}</div>
+      <div className={styles.quickReplies}>
+        <button type="button" onClick={() => onPrimary(actionState)}>
+          {actionState.primaryAction}
+        </button>
+        <button type="button" onClick={() => onSecondary(actionState)}>
+          {actionState.secondaryAction}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function OrdinaryDetailsSheet({ product, variables, onDone }: { product: ProductContext; variables: TraceVariables; onDone: () => void }) {
   const rows = ordinaryDetailRows(product, variables);
 
   return (
@@ -707,10 +593,7 @@ function OrdinaryDetailsSheet({
 
       <article className={styles.detailNote}>
         <strong>Baseline condition</strong>
-        <p>
-          You can check these ordinary details yourself, but the AI answer does not expose source
-          anchors or editable decision variables.
-        </p>
+        <p>You can check these ordinary details yourself, but the AI answer does not expose source anchors or editable decision variables.</p>
       </article>
 
       <button className={styles.fullWidthPrimary} type="button" onClick={onDone}>
@@ -721,67 +604,30 @@ function OrdinaryDetailsSheet({
 }
 
 function ordinaryDetailRows(product: ProductContext, variables: TraceVariables) {
-  const name = product.name.toLowerCase();
-  if (name.includes("yoghurt")) {
-    return [
-      { label: "Order status", value: "Delivered today" },
-      { label: "Product type", value: "Chilled food" },
-      { label: "Return rule", value: "Change-of-mind returns are usually excluded" },
-      { label: "Issue reported", value: variables.reason },
-    ];
-  }
-
-  if (name.includes("sandwich")) {
-    return [
-      { label: "Order status", value: "Delivered today" },
-      { label: "Product type", value: "Fresh food" },
-      { label: "Return rule", value: "Perishable food has return exceptions" },
-      { label: "Issue reported", value: variables.reason },
-    ];
-  }
-
-  if (name.includes("snack")) {
+  if (product.name.includes("Snack")) {
     return [
       { label: "Order status", value: "Delivered yesterday" },
       { label: "Evidence", value: variables.evidence },
-      { label: "Store note", value: "Photo may be needed before review" },
       { label: "Issue reported", value: variables.issueIdentified },
     ];
   }
 
-  if (name.includes("cookie")) {
+  if (product.name.includes("Cookie") || product.name.includes("Protein")) {
     return [
-      { label: "Order status", value: product.status },
       { label: "Product type", value: "Packaged food" },
-      { label: "Evidence", value: variables.evidence },
-      { label: "Store note", value: "Photos help the seller review damage" },
-    ];
-  }
-
-  if (name.includes("container")) {
-    return [
-      { label: "Order status", value: product.status },
-      { label: "Product type", value: "Reusable home product" },
-      { label: "Support option", value: "Replacement or refund may be reviewed" },
-      { label: "Issue reported", value: variables.issueIdentified },
+      { label: "Product information", value: "Ingredients and allergen notice available" },
+      { label: "Customer concern", value: variables.reason },
     ];
   }
 
   return [
     { label: "Order status", value: product.status },
-    { label: "Product type", value: product.detail },
-    { label: "Support option", value: variables.request },
+    { label: "Evidence", value: variables.evidence },
     { label: "Issue reported", value: variables.issueIdentified },
   ];
 }
 
-function AssistantRow({
-  children,
-  compact = false,
-}: {
-  children: React.ReactNode;
-  compact?: boolean;
-}) {
+function AssistantRow({ children, compact = false }: { children: ReactNode; compact?: boolean }) {
   return (
     <div className={`${styles.assistantRow} ${compact ? styles.compactRow : ""}`}>
       <span className={styles.sparkle} aria-hidden="true">

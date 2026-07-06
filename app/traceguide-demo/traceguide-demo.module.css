@@ -906,6 +906,18 @@
   margin-bottom: 24px;
 }
 
+.sheetIcon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #efedff;
+  color: #2c20ff;
+  font-size: 21px;
+  font-weight: 850;
+}
+
 .simpleSheetHeader h2 {
   margin: 0 0 11px;
   color: #070813;
@@ -964,6 +976,18 @@
   font-weight: 520;
 }
 
+.relevancePill {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 14px;
+  padding: 7px 11px;
+  border-radius: 8px;
+  background: #dbf5e8;
+  color: #087f3f;
+  font-size: 11px;
+  font-weight: 760;
+}
+
 .sheetActions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1003,11 +1027,27 @@
 }
 
 .sourceList article,
+.sourceList button,
 .detailCard {
   padding: 16px 17px;
   border-radius: 14px;
   border: 1px solid #e5e8f2;
   background: #ffffff;
+}
+
+.sourceList button {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sourceList button span {
+  display: block;
+  margin-bottom: 7px;
+  color: #2519ff;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
 }
 
 .ordinaryDetailHeader {
@@ -1153,6 +1193,29 @@
 }
 
 .selectField select {
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid #e1e5ef;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #151729;
+  font-size: 14px;
+  outline: none;
+}
+
+.variableRow {
+  display: grid;
+  gap: 8px;
+}
+
+.variableRow span {
+  color: #101325;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.variableRow select {
   width: 100%;
   height: 48px;
   padding: 0 14px;

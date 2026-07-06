@@ -716,11 +716,9 @@ const unknownScenario: Scenario = {
 function detectScenario(question: string, taskId?: string): Scenario {
   const task = (taskId || "").toUpperCase();
   if (task === "S1-T1") return scenarios.allergen_safety;
-  if (task === "S1-T2") return scenarios.coffee_maker_address_change;
-  if (task === "S1-T3") return scenarios.glass_damaged_refund;
+  if (task === "S1-T2") return scenarios.glass_damaged_refund;
   if (task === "S2-T1") return scenarios.protein_bar_allergen_safety;
-  if (task === "S2-T2") return scenarios.fresh_sandwich_address_change;
-  if (task === "S2-T3") return scenarios.snack_package_evidence_unclear;
+  if (task === "S2-T2") return scenarios.snack_package_evidence_unclear;
 
   const q = question.toLowerCase();
 
@@ -1271,6 +1269,14 @@ async function fetchCommerceContextFromSupabase(
     if (taskResult.error || !taskResult.data) return null;
 
     const task = taskResult.data as CommerceDatabaseRows["task"];
+    if (task.scenario_key !== scenario.key) {
+      console.warn("TraceGuide task row scenario mismatch; using local fixture.", {
+        taskId: task.id,
+        expected: scenario.key,
+        actual: task.scenario_key,
+      });
+      return null;
+    }
     const [customerResult, orderResult] = await Promise.all([
       supabase.from("traceguide_customers").select("*").eq("id", task.customer_id).maybeSingle(),
       supabase.from("traceguide_orders").select("*").eq("id", task.order_id).maybeSingle(),

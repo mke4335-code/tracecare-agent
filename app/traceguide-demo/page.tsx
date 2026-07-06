@@ -1,8 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import styles from "./traceguide-demo.module.css";
+import {
+  getTraceguideStudyTask,
+  orderedTraceguideTasks,
+  type TraceguideStudyTask,
+} from "../../lib/traceguide-study-config";
 
 type Source = {
   id: string;
@@ -10,7 +15,6 @@ type Source = {
   title: string;
   category: string;
   excerpt: string;
-  matchScore?: number;
   relevance: "High relevance" | "Medium relevance" | "Relevant";
   matchedAnswer?: string;
 };
@@ -29,6 +33,14 @@ type ActionState = {
   primaryAction: string;
   secondaryAction: string;
   canStartRequest: boolean;
+};
+
+type ProductContext = {
+  name: string;
+  image: "glass-box" | "cookies" | "container-set" | "coffee-maker" | "protein-bar" | "yoghurt" | "sandwich" | "snack";
+  detail: string;
+  status: string;
+  linkLabel: string;
 };
 
 type TraceResponse = {
@@ -55,24 +67,6 @@ type ActionResponse = {
 
 type SheetMode = "sourceOverview" | "sourcesUsed" | "sourceDetails" | "variables" | "evidence" | "ordinaryDetails" | null;
 
-const defaultQuestion = "The glass lunch box arrived damaged. Can I return it?";
-
-type ProductContext = {
-  name: string;
-  image: "glass-box" | "cookies" | "container-set" | "coffee-maker" | "protein-bar" | "yoghurt" | "sandwich" | "snack";
-  detail: string;
-  status: string;
-  linkLabel: string;
-};
-
-type StudyTask = {
-  id: string;
-  set: "1" | "2";
-  category: "Product information decision" | "Order modification decision" | "Return/refund decision";
-  label: string;
-  text: string;
-};
-
 const defaultProduct: ProductContext = {
   name: "Glass Lunch Box",
   image: "glass-box",
@@ -80,51 +74,6 @@ const defaultProduct: ProductContext = {
   status: "Delivered 2 days ago",
   linkLabel: "Order details",
 };
-
-const studyTasks: StudyTask[] = [
-  {
-    id: "S1-T1",
-    set: "1",
-    category: "Product information decision",
-    label: "Peanut allergy: cookies",
-    text: "I’m allergic to peanuts. Can I eat these milk cookies?",
-  },
-  {
-    id: "S1-T2",
-    set: "1",
-    category: "Order modification decision",
-    label: "Change address before dispatch",
-    text: "Can I change the delivery address for my coffee maker before it is shipped?",
-  },
-  {
-    id: "S1-T3",
-    set: "1",
-    category: "Return/refund decision",
-    label: "Damaged lunch box",
-    text: "The glass lunch box arrived damaged. Can I return it?",
-  },
-  {
-    id: "S2-T1",
-    set: "2",
-    category: "Product information decision",
-    label: "Peanut allergy: protein bar",
-    text: "I’m allergic to peanuts. Can I eat this protein bar?",
-  },
-  {
-    id: "S2-T2",
-    set: "2",
-    category: "Order modification decision",
-    label: "Change address after dispatch",
-    text: "My fresh sandwich is already out for delivery. Can I change the delivery address?",
-  },
-  {
-    id: "S2-T3",
-    set: "2",
-    category: "Return/refund decision",
-    label: "Snack package damaged",
-    text: "The snack package arrived damaged, but I have not added a photo yet. Can I get a refund?",
-  },
-];
 
 const fallbackResponse: TraceResponse = {
   answer:
@@ -135,25 +84,19 @@ const fallbackResponse: TraceResponse = {
     issueIdentified: "Damaged item",
     request: "Return & Refund",
     reason: "Item arrived damaged",
-    evidence: "Photos needed",
+    evidence: "Photos provided",
   },
   nextAction: "start a refund request",
   product: defaultProduct,
   loadingTitle: "Checking refund eligibility...",
-  loadingSteps: [
-    "Understanding your request",
-    "Checking order status",
-    "Reading return policy",
-    "Preparing answer",
-  ],
+  loadingSteps: ["Understanding your request", "Checking order status", "Reading return policy", "Preparing answer"],
   sources: [
     {
       id: "return-policy",
       number: 1,
       title: "Return and refund policy",
       category: "Return policy",
-      excerpt:
-        "Items damaged during delivery can usually be returned within 30 days of delivery. Keep the item and packaging if possible.",
+      excerpt: "Items damaged during delivery can usually be returned within 30 days of delivery. Keep the item and packaging if possible.",
       relevance: "High relevance",
       matchedAnswer: "return window according to the return policy",
     },
@@ -162,30 +105,12 @@ const fallbackResponse: TraceResponse = {
       number: 2,
       title: "Order status",
       category: "Order status",
-      excerpt:
-        "Your order for Glass Lunch Box was delivered 2 days ago. The return window is still open.",
+      excerpt: "Your order for Glass Lunch Box was delivered 2 days ago. The return window is still open.",
       relevance: "High relevance",
       matchedAnswer: "order status shows it was delivered recently",
     },
-    {
-      id: "store-note",
-      number: 3,
-      title: "Store return note",
-      category: "Store policy",
-      excerpt:
-        "The store may ask for a photo when an item arrives damaged, so the request can be reviewed faster.",
-      relevance: "Medium relevance",
-      matchedAnswer: "keep the item and packaging if possible",
-    },
   ],
 };
-
-const defaultLoadingSteps = [
-  "Understanding your request",
-  "Checking order status",
-  "Reading return policy",
-  "Preparing answer",
-];
 
 function includesAny(text: string, terms: string[]) {
   const lower = text.toLowerCase();
@@ -198,48 +123,14 @@ function inferProduct(prompt: string): ProductContext {
       name: "Protein Bar",
       image: "protein-bar",
       detail: "60g / bar",
-      status: "Delivered yesterday",
+      status: "Product information available",
       linkLabel: "Product details",
     };
   }
 
-  if (includesAny(prompt, ["coffee maker", "coffee machine", "咖啡机"])) {
+  if (includesAny(prompt, ["snack", "package damaged", "零食", "包装"])) {
     return {
-      name: "Coffee Maker",
-      image: "coffee-maker",
-      detail: "1 item",
-      status: "Not dispatched yet",
-      linkLabel: "Order details",
-    };
-  }
-
-  if (includesAny(prompt, ["yoghurt", "yogurt", "chilled", "酸奶", "冷藏"])) {
-    return {
-      name: "Chilled Yoghurt",
-      image: "yoghurt",
-      detail: "4 x 125g",
-      status: "Delivered today",
-      linkLabel: "Product details",
-    };
-  }
-
-  if (includesAny(prompt, ["sandwich", "三明治"])) {
-    return {
-      name: "Fresh Sandwich",
-      image: "sandwich",
-      detail: "1 pack",
-      status: includesAny(prompt, ["address", "out for delivery", "delivery address", "改地址", "配送中"])
-        ? "Out for delivery"
-        : "Delivered today",
-      linkLabel: includesAny(prompt, ["address", "out for delivery", "delivery address", "改地址", "配送中"])
-        ? "Delivery details"
-        : "Product details",
-    };
-  }
-
-  if (includesAny(prompt, ["snack", "snacks", "package damaged", "零食", "包装"])) {
-    return {
-      name: "Snack Pack",
+      name: "Snack Package",
       image: "snack",
       detail: "6-pack",
       status: "Delivered yesterday",
@@ -247,29 +138,13 @@ function inferProduct(prompt: string): ProductContext {
     };
   }
 
-  if (includesAny(prompt, ["cookie", "cookies", "biscuit", "food", "allergen", "peanut", "饼干", "食品", "过敏", "花生"])) {
+  if (includesAny(prompt, ["cookie", "cookies", "peanut", "allergic", "过敏", "花生"])) {
     return {
       name: "Milk Cookies",
       image: "cookies",
       detail: "100g / pack",
-      status: includesAny(prompt, ["allergen", "peanut", "过敏", "花生"])
-        ? "Product information available"
-        : "Delivered 2 days ago",
+      status: "Product information available",
       linkLabel: "Product details",
-    };
-  }
-
-  if (includesAny(prompt, ["late", "delay", "delayed", "compensation", "missing", "accessory", "延迟", "补偿", "缺少", "配件"])) {
-    return {
-      name: "Glass Food Containers Set",
-      image: "container-set",
-      detail: "4-piece set",
-      status: includesAny(prompt, ["late", "delay", "delayed", "compensation", "延迟", "补偿"])
-        ? "Arrived 2 days late"
-        : "Delivered today",
-      linkLabel: includesAny(prompt, ["late", "delay", "delayed", "compensation", "延迟", "补偿"])
-        ? "Delivery details"
-        : "Order details",
     };
   }
 
@@ -277,7 +152,7 @@ function inferProduct(prompt: string): ProductContext {
 }
 
 function inferVariables(prompt: string): TraceVariables {
-  if (includesAny(prompt, ["protein bar", "蛋白棒"])) {
+  if (includesAny(prompt, ["protein bar", "cookie", "cookies", "peanut", "allergic", "过敏", "花生"])) {
     return {
       issueIdentified: "Allergen concern",
       request: "Product safety advice",
@@ -286,43 +161,7 @@ function inferVariables(prompt: string): TraceVariables {
     };
   }
 
-  if (includesAny(prompt, ["coffee maker", "coffee machine", "咖啡机"])) {
-    return {
-      issueIdentified: "Delivery address change",
-      request: "Change delivery address",
-      reason: "Order has not been dispatched",
-      evidence: "Order status available",
-    };
-  }
-
-  if (includesAny(prompt, ["sandwich", "delivery address", "out for delivery", "改地址", "配送中"])) {
-    return {
-      issueIdentified: "Delivery address change",
-      request: "Change delivery address",
-      reason: "Order is already out for delivery",
-      evidence: "Delivery status available",
-    };
-  }
-
-  if (includesAny(prompt, ["yoghurt", "yogurt", "chilled", "酸奶", "冷藏"])) {
-    return {
-      issueIdentified: "Change-of-mind chilled food return",
-      request: "Return & Refund",
-      reason: "Customer changed their mind",
-      evidence: "No quality issue reported",
-    };
-  }
-
-  if (includesAny(prompt, ["sandwich", "三明治"])) {
-    return {
-      issueIdentified: "Change-of-mind fresh food return",
-      request: "Return & Refund",
-      reason: "Customer changed their mind",
-      evidence: "No quality issue reported",
-    };
-  }
-
-  if (includesAny(prompt, ["snack", "package damaged", "零食", "包装破损"])) {
+  if (includesAny(prompt, ["snack", "package damaged", "零食", "包装"])) {
     return {
       issueIdentified: "Damaged package",
       request: "Return & Refund",
@@ -331,48 +170,37 @@ function inferVariables(prompt: string): TraceVariables {
     };
   }
 
-  if (includesAny(prompt, ["allergen", "peanut", "过敏", "花生"])) {
-    return {
-      issueIdentified: "Allergen concern",
-      request: "Product safety advice",
-      reason: "Customer is allergic to peanuts",
-      evidence: "Ingredient data available",
-    };
-  }
-
-  if (includesAny(prompt, ["late", "delay", "delayed", "compensation", "延迟", "补偿"])) {
-    return {
-      issueIdentified: "Late delivery",
-      request: "Compensation",
-      reason: "Delivered after promised date",
-      evidence: "Order timeline available",
-    };
-  }
-
-  if (includesAny(prompt, ["missing", "accessory", "缺少", "少了", "配件"])) {
-    return {
-      issueIdentified: "Missing accessory",
-      request: "Replacement or refund",
-      reason: "Accessory missing from package",
-      evidence: "Photos needed",
-    };
-  }
-
-  if (includesAny(prompt, ["food", "cookie", "cookies", "biscuit", "饼干", "食品", "吃的"])) {
-    return {
-      issueIdentified: "Damaged food item",
-      request: "Return & Refund",
-      reason: "Food arrived damaged",
-      evidence: "Photos needed",
-    };
-  }
-
   return fallbackResponse.variables;
+}
+
+function inferLoadingTitle(prompt: string) {
+  if (includesAny(prompt, ["peanut", "allergic", "protein", "cookie", "过敏", "花生"])) return "Checking product safety...";
+  if (includesAny(prompt, ["snack", "package", "零食", "包装"])) return "Checking evidence needed...";
+  return "Checking refund eligibility...";
+}
+
+function inferLoadingSteps(prompt: string) {
+  if (includesAny(prompt, ["peanut", "allergic", "protein", "cookie", "过敏", "花生"])) {
+    return ["Understanding allergy concern", "Reading ingredients", "Checking safety rule", "Preparing answer"];
+  }
+
+  if (includesAny(prompt, ["snack", "package", "零食", "包装"])) {
+    return ["Understanding your issue", "Checking order status", "Reading evidence rule", "Preparing answer"];
+  }
+
+  return ["Understanding your request", "Checking order status", "Reading return policy", "Preparing answer"];
+}
+
+function productImageSrc(product: ProductContext) {
+  if (product.image === "protein-bar") return "/traceguide-protein-bar.jpg";
+  if (product.image === "snack") return "/traceguide-snack.jpg";
+  if (product.image === "cookies") return "/traceguide-cookie.png";
+  if (product.image === "container-set") return "/traceguide-container-set.png";
+  return "/traceguide-glass-lunch-box.png";
 }
 
 function actionStateForResponse(response: TraceResponse): ActionState {
   if (response.actionState) return response.actionState;
-
   const lower = response.nextAction.toLowerCase();
 
   if (lower.includes("photo") || lower.includes("evidence")) {
@@ -386,7 +214,7 @@ function actionStateForResponse(response: TraceResponse): ActionState {
     };
   }
 
-  if (lower.includes("human") || lower.includes("review")) {
+  if (lower.includes("human") || lower.includes("support") || lower.includes("review")) {
     return {
       kind: "needs_human_review",
       label: "Human support",
@@ -407,119 +235,11 @@ function actionStateForResponse(response: TraceResponse): ActionState {
   };
 }
 
-function inferLoadingTitle(prompt: string) {
-  if (includesAny(prompt, ["yoghurt", "yogurt", "chilled", "酸奶", "冷藏"])) return "Checking chilled food return rules...";
-  if (includesAny(prompt, ["sandwich", "三明治"])) return "Checking fresh food return rules...";
-  if (includesAny(prompt, ["snack", "package damaged", "零食", "包装破损"])) return "Checking evidence needed...";
-  if (includesAny(prompt, ["allergen", "peanut", "过敏", "花生"])) return "Checking product safety...";
-  if (includesAny(prompt, ["late", "delay", "delayed", "compensation", "延迟", "补偿"])) return "Checking delivery compensation...";
-  if (includesAny(prompt, ["missing", "accessory", "缺少", "少了", "配件"])) return "Checking support options...";
-  if (includesAny(prompt, ["food", "cookie", "cookies", "biscuit", "饼干", "食品", "吃的"])) return "Checking food return options...";
-  return "Checking refund eligibility...";
-}
-
-function inferLoadingSteps(prompt: string) {
-  if (includesAny(prompt, ["yoghurt", "yogurt", "chilled", "酸奶", "冷藏"])) {
-    return ["Understanding your request", "Checking product type", "Reading food return exception", "Preparing answer"];
-  }
-
-  if (includesAny(prompt, ["sandwich", "三明治"])) {
-    return ["Understanding your request", "Checking product type", "Reading fresh food exception", "Preparing answer"];
-  }
-
-  if (includesAny(prompt, ["snack", "package damaged", "零食", "包装破损"])) {
-    return ["Understanding your issue", "Checking order status", "Reading evidence rule", "Preparing answer"];
-  }
-
-  if (includesAny(prompt, ["allergen", "peanut", "过敏", "花生"])) {
-    return ["Understanding allergy concern", "Reading ingredients", "Checking safety rule", "Preparing answer"];
-  }
-
-  if (includesAny(prompt, ["late", "delay", "delayed", "compensation", "延迟", "补偿"])) {
-    return ["Understanding your request", "Checking delivery timeline", "Reading compensation policy", "Preparing answer"];
-  }
-
-  if (includesAny(prompt, ["missing", "accessory", "缺少", "少了", "配件"])) {
-    return ["Understanding your issue", "Checking order contents", "Reading support rule", "Preparing answer"];
-  }
-
-  if (includesAny(prompt, ["food", "cookie", "cookies", "biscuit", "饼干", "食品", "吃的"])) {
-    return ["Understanding your issue", "Checking product type", "Reading return policy", "Preparing answer"];
-  }
-
-  return defaultLoadingSteps;
-}
-
-function productImageSrc(product: ProductContext) {
-  if (product.image === "coffee-maker") return "/traceguide-coffee-maker.jpg";
-  if (product.image === "protein-bar") return "/traceguide-protein-bar.jpg";
-  if (product.image === "yoghurt") return "/traceguide-yoghurt.jpg";
-  if (product.image === "sandwich") return "/traceguide-sandwich.jpg";
-  if (product.image === "snack") return "/traceguide-snack.jpg";
-  if (product.image === "cookies") return "/traceguide-cookie.png";
-  if (product.image === "container-set") return "/traceguide-container-set.png";
-  return "/traceguide-glass-lunch-box.png";
-}
-
-function ordinaryDetailRows(product: ProductContext, variables: TraceVariables) {
-  const name = product.name.toLowerCase();
-  if (name.includes("yoghurt")) {
-    return [
-      { label: "Order status", value: "Delivered today" },
-      { label: "Product type", value: "Chilled food" },
-      { label: "Return rule", value: "Change-of-mind returns are usually excluded" },
-      { label: "Issue reported", value: variables.reason },
-    ];
-  }
-
-  if (name.includes("sandwich")) {
-    return [
-      { label: "Order status", value: "Delivered today" },
-      { label: "Product type", value: "Fresh food" },
-      { label: "Return rule", value: "Perishable food has return exceptions" },
-      { label: "Issue reported", value: variables.reason },
-    ];
-  }
-
-  if (name.includes("snack")) {
-    return [
-      { label: "Order status", value: "Delivered yesterday" },
-      { label: "Evidence", value: variables.evidence },
-      { label: "Store note", value: "Photo may be needed before review" },
-      { label: "Issue reported", value: variables.issueIdentified },
-    ];
-  }
-
-  if (name.includes("cookie")) {
-    return [
-      { label: "Order status", value: product.status },
-      { label: "Product type", value: "Packaged food" },
-      { label: "Evidence", value: variables.evidence },
-      { label: "Store note", value: "Photos help the seller review damage" },
-    ];
-  }
-
-  if (name.includes("container")) {
-    return [
-      { label: "Order status", value: product.status },
-      { label: "Product type", value: "Reusable home product" },
-      { label: "Support option", value: "Replacement or refund may be reviewed" },
-      { label: "Issue reported", value: variables.issueIdentified },
-    ];
-  }
-
-  return [
-    { label: "Order status", value: product.status },
-    { label: "Product type", value: product.detail },
-    { label: "Support option", value: variables.request },
-    { label: "Issue reported", value: variables.issueIdentified },
-  ];
-}
-
 export default function TraceGuideDemo() {
   const [participantCode, setParticipantCode] = useState("");
   const [clientSessionId, setClientSessionId] = useState("");
-  const [activeTask, setActiveTask] = useState<StudyTask | null>(null);
+  const [assignedTask, setAssignedTask] = useState<TraceguideStudyTask | null>(null);
+  const [activeTask, setActiveTask] = useState<TraceguideStudyTask | null>(null);
   const [question, setQuestion] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [response, setResponse] = useState<TraceResponse | null>(null);
@@ -531,25 +251,25 @@ export default function TraceGuideDemo() {
   const [userApproved, setUserApproved] = useState(false);
   const [action, setAction] = useState<ActionResponse | null>(null);
   const [actionStep, setActionStep] = useState(0);
-  const [actionReply, setActionReply] = useState("Yes, please");
+  const [actionReply, setActionReply] = useState("Yes");
   const [previewProduct, setPreviewProduct] = useState<ProductContext>(defaultProduct);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const visibleTasks = useMemo(() => orderedTraceguideTasks(assignedTask?.id), [assignedTask]);
   const activeResponse = response || fallbackResponse;
   const primarySource = selectedSource || activeResponse.sources[0];
   const activeProduct = response?.product || previewProduct;
-  const activeLoadingSteps = response?.loadingSteps?.length
-    ? response.loadingSteps
-    : inferLoadingSteps(question);
+  const activeLoadingSteps = response?.loadingSteps?.length ? response.loadingSteps : inferLoadingSteps(question);
+  const actionSteps = action?.steps || ["Creating request", "Adding details", "Sending to seller", "Notifying you of updates"];
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const participant = params.get("pid") || params.get("participant") || "";
-    const taskId = params.get("task") || params.get("taskId") || "";
-    const nextTask = studyTasks.find((task) => task.id.toLowerCase() === taskId.toLowerCase()) || null;
+    const task = getTraceguideStudyTask(params.get("task") || params.get("taskId"));
     setParticipantCode(participant);
+    setAssignedTask(task);
+    setActiveTask(task);
     setClientSessionId(window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-    if (nextTask) setActiveTask(nextTask);
   }, []);
 
   function logStudyEvent(eventName: string, payload: Record<string, unknown> = {}) {
@@ -568,20 +288,35 @@ export default function TraceGuideDemo() {
     }).catch((error) => console.warn("Study event was not saved", error));
   }
 
+  function resetToTasks() {
+    setPhase("idle");
+    setQuestion("");
+    setInputValue("");
+    setResponse(null);
+    setAction(null);
+    setUserApproved(false);
+    setActionStep(0);
+    setSheetMode(null);
+    setSelectedSource(null);
+    setActiveTask(assignedTask);
+    logStudyEvent("returned_to_task_selection");
+  }
+
   async function runAssessment(
     prompt: string,
     nextVariables: TraceVariables,
     nextPhase: "loading" | "rechecking",
-    taskOverride?: StudyTask | null
+    taskOverride?: TraceguideStudyTask | null
   ) {
-    const taskForRun = taskOverride === null ? null : taskOverride ?? activeTask;
+    const taskForRun = taskOverride === undefined ? activeTask : taskOverride;
     setPhase(nextPhase);
     setLoadingStep(0);
     setSheetMode(null);
     setSelectedSource(null);
     setQuestion(prompt);
     setPreviewProduct(inferProduct(prompt));
-    if (taskOverride) setActiveTask(taskOverride);
+    setActiveTask(taskForRun || null);
+
     if (nextPhase === "loading") {
       setResponse(null);
       setAction(null);
@@ -593,18 +328,16 @@ export default function TraceGuideDemo() {
         taskCategory: taskForRun?.category,
       });
     } else {
-      logStudyEvent("variables_saved_recheck_started", {
-        question: prompt,
-        variables: nextVariables,
-      });
+      logStudyEvent("variables_saved_recheck_started", { question: prompt, variables: nextVariables });
     }
 
+    const steps = inferLoadingSteps(prompt);
     const interval = window.setInterval(() => {
-      setLoadingStep((current) => Math.min(current + 1, inferLoadingSteps(prompt).length - 1));
-    }, 620);
+      setLoadingStep((current) => Math.min(current + 1, steps.length - 1));
+    }, 600);
 
     try {
-      const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 1900));
+      const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 1500));
       const apiRequest = fetch("/api/traceguide-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -612,27 +345,25 @@ export default function TraceGuideDemo() {
           question: prompt,
           taskId: taskForRun?.id,
           variables: nextVariables,
-          product: {
-            name: inferProduct(prompt).name,
-            deliveryStatus: inferProduct(prompt).status,
-          },
+          participantCode,
+          condition: "traceguide",
         }),
       });
       const [apiResponse] = await Promise.all([apiRequest, minimumDelay]);
-
       const result = await apiResponse.json();
-      if (!apiResponse.ok) throw new Error(result.error || "TraceGuide failed.");
+      if (!apiResponse.ok) throw new Error(result.error || "TraceGuide request failed.");
 
-      setResponse(normaliseResponse(result));
-      setVariables(normaliseResponse(result).variables);
+      const normalised = normaliseResponse(result, prompt);
+      setResponse(normalised);
+      setVariables(normalised.variables);
       logStudyEvent(nextPhase === "rechecking" ? "updated_answer_shown" : "answer_shown", {
         question: prompt,
         taskId: taskForRun?.id,
-        scenario: result.scenario,
-        confidence: result.confidence,
-        usedLLM: result.usedLLM,
-        answer: result.answer,
-        sources: result.sources,
+        scenario: normalised.scenario,
+        confidence: normalised.confidence,
+        usedLLM: normalised.usedLLM,
+        answer: normalised.answer,
+        sources: normalised.sources,
       });
     } catch (error) {
       console.error(error);
@@ -640,12 +371,12 @@ export default function TraceGuideDemo() {
       setVariables(fallbackResponse.variables);
     } finally {
       window.clearInterval(interval);
-      setLoadingStep(inferLoadingSteps(prompt).length);
+      setLoadingStep(steps.length);
       setPhase("answer");
     }
   }
 
-  function normaliseResponse(result: Partial<TraceResponse>): TraceResponse {
+  function normaliseResponse(result: Partial<TraceResponse>, prompt: string): TraceResponse {
     return {
       answer: result.answer || fallbackResponse.answer,
       confidence: typeof result.confidence === "number" ? result.confidence : 88,
@@ -653,20 +384,28 @@ export default function TraceGuideDemo() {
       sources: result.sources?.length ? result.sources : fallbackResponse.sources,
       sourceTags: result.sourceTags?.length ? result.sourceTags : fallbackResponse.sourceTags,
       variables: result.variables || fallbackResponse.variables,
-      nextAction: result.nextAction || "start a refund request",
+      nextAction: result.nextAction || "start a support request",
       actionState: result.actionState,
-      product: result.product || inferProduct(question),
-      loadingTitle: result.loadingTitle || "Checking support details...",
-      loadingSteps: result.loadingSteps?.length ? result.loadingSteps : inferLoadingSteps(question),
+      product: result.product || inferProduct(prompt),
+      loadingTitle: result.loadingTitle || inferLoadingTitle(prompt),
+      loadingSteps: result.loadingSteps?.length ? result.loadingSteps : inferLoadingSteps(prompt),
       scenario: result.scenario,
       usedLLM: result.usedLLM,
       runId: result.runId,
     };
   }
 
-  function startSuggestedQuestion(prompt: string, task?: StudyTask) {
+  function startSuggestedQuestion(task: TraceguideStudyTask) {
     setInputValue("");
-    void runAssessment(prompt, inferVariables(prompt), "loading", task || null);
+    void runAssessment(task.prompt, inferVariables(task.prompt), "loading", task);
+  }
+
+  function submitQuestion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = inputValue.trim();
+    if (!trimmed) return;
+    setInputValue("");
+    void runAssessment(trimmed, inferVariables(trimmed), "loading", null);
   }
 
   function openSource(source: Source) {
@@ -682,13 +421,9 @@ export default function TraceGuideDemo() {
   function renderAnswer(answer: string, sources: Source[]) {
     return answer.split(/(\[\d+\])/g).map((part, index) => {
       const citation = part.match(/^\[(\d+)\]$/);
-      if (!citation) {
-        return <span key={`${part}-${index}`}>{part}</span>;
-      }
-
+      if (!citation) return <span key={`${part}-${index}`}>{part}</span>;
       const source = sources.find((item) => item.number === Number(citation[1]));
       if (!source) return <span key={`${part}-${index}`}>{part}</span>;
-
       return (
         <button
           key={`${part}-${index}`}
@@ -709,10 +444,10 @@ export default function TraceGuideDemo() {
 
   async function saveAndRecheck() {
     setSheetMode(null);
-    await runAssessment(question, variables, "rechecking");
+    await runAssessment(question, variables, "rechecking", activeTask);
   }
 
-  async function startRefundRequest(nextActionOverride = activeResponse.nextAction, replyLabel = "Yes, please") {
+  async function startRequest(nextActionOverride = activeResponse.nextAction, replyLabel = "Yes") {
     setUserApproved(true);
     setActionReply(replyLabel);
     setPhase("action");
@@ -729,7 +464,6 @@ export default function TraceGuideDemo() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "agent_request",
-          // The action is simulated, but it uses the current detected product and variables.
           product: activeProduct.name,
           nextAction: nextActionOverride,
           variables,
@@ -743,12 +477,7 @@ export default function TraceGuideDemo() {
       console.error(error);
       setAction({
         requestId: "RF-DEMO",
-        steps: [
-          "Preparing support request",
-          "Attaching relevant details",
-          "Sending request to seller",
-          "Notifying you of updates",
-        ],
+        steps: ["Preparing support request", "Attaching relevant details", "Sending request to seller", "Notifying you of updates"],
       });
     }
 
@@ -760,43 +489,19 @@ export default function TraceGuideDemo() {
         }
         return current + 1;
       });
-    }, 900);
+    }, 850);
   }
-
-  function submitQuestion(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = inputValue.trim();
-    if (!trimmed) return;
-    setQuestion(trimmed);
-    setInputValue("");
-    setUserApproved(false);
-    setActionReply("Yes, please");
-    setAction(null);
-    setActiveTask(null);
-    void runAssessment(trimmed, inferVariables(trimmed), "loading", null);
-  }
-
-  const actionSteps = useMemo(
-    () =>
-      action?.steps || [
-        "Creating refund request",
-        "Adding evidence details",
-        "Submitting request to seller",
-        "Notifying you of updates",
-      ],
-    [action]
-  );
 
   return (
-    <main className={`${styles.page} notranslate`} translate="no">
+    <main className={styles.page}>
       <section className={styles.phone} aria-label="TraceGuide Agent mobile demo">
         <StatusBar />
         <header className={styles.nav}>
-          <button className={styles.backButton} type="button" aria-label="Go back">
+          <button className={styles.backButton} type="button" aria-label="Back to task selection" onClick={resetToTasks}>
             ‹
           </button>
           <h1>AI Support</h1>
-          <button className={styles.humanButton} type="button">
+          <button className={styles.humanButton} type="button" onClick={() => logStudyEvent("human_clicked")}>
             Human
           </button>
         </header>
@@ -804,11 +509,24 @@ export default function TraceGuideDemo() {
         <section className={styles.conversation}>
           {phase === "idle" ? (
             <AssistantRow>
-              <WelcomeCard onPickQuestion={startSuggestedQuestion} activeTask={activeTask} />
+              <article className={styles.welcomeCard}>
+                <h2>Hi, I’m TraceGuide Support.</h2>
+                <p>Choose a study task below, or type your own e-commerce support question.</p>
+                <div className={styles.suggestionGrid} aria-label="Suggested questions">
+                  {visibleTasks.map((item) => (
+                    <button key={item.id} type="button" onClick={() => startSuggestedQuestion(item)}>
+                      <span>
+                        {item.id} · {item.label}
+                      </span>
+                      {item.prompt}
+                    </button>
+                  ))}
+                </div>
+              </article>
             </AssistantRow>
           ) : (
             <>
-              <UserQuestion question={question || defaultQuestion} />
+              <UserQuestion question={question} />
               <ProductCard
                 product={activeProduct}
                 onOpenDetails={() => {
@@ -867,7 +585,7 @@ export default function TraceGuideDemo() {
                       type="button"
                       onClick={() => {
                         setSheetMode("variables");
-                        logStudyEvent("edit_key_variables_clicked", { variables });
+                        logStudyEvent("view_ai_understanding_clicked", { variables });
                       }}
                     >
                       View AI understanding
@@ -878,53 +596,34 @@ export default function TraceGuideDemo() {
 
               {!userApproved && (
                 <AssistantRow compact>
-                  <div>
-                    {(() => {
-                      const actionState = actionStateForResponse(activeResponse);
+                  <ActionPrompt
+                    actionState={actionStateForResponse(activeResponse)}
+                    onPrimary={(actionState) => {
+                      logStudyEvent("action_primary_clicked", {
+                        actionState: actionState.kind,
+                        nextAction: activeResponse.nextAction,
+                      });
 
-                      return (
-                        <>
-                          <div className={styles.askBubble}>{actionState.prompt}</div>
-                          <div className={styles.quickReplies}>
-                            <button
-                              type="button"
-                              onClick={
-                                actionState.canStartRequest
-                                  ? () => startRefundRequest()
-                                  : () => {
-                                      logStudyEvent("action_primary_clicked", {
-                                        actionState: actionState.kind,
-                                        nextAction: activeResponse.nextAction,
-                                      });
+                      if (actionState.kind === "needs_evidence") {
+                        setSheetMode("evidence");
+                        return;
+                      }
 
-                                      if (actionState.kind === "needs_evidence") {
-                                        setSheetMode("evidence");
-                                      } else {
-                                        void startRefundRequest("contact human support", actionState.primaryAction);
-                                      }
-                                    }
-                              }
-                            >
-                              {actionState.primaryAction}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                logStudyEvent("action_secondary_clicked", {
-                                  actionState: actionState.kind,
-                                  nextAction: activeResponse.nextAction,
-                                });
+                      if (actionState.kind === "informational") {
+                        void startRequest("contact human support", actionState.primaryAction);
+                        return;
+                      }
 
-                                inputRef.current?.focus();
-                              }}
-                            >
-                              {actionState.secondaryAction}
-                            </button>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
+                      void startRequest(actionState.canStartRequest ? activeResponse.nextAction : actionState.label.toLowerCase(), actionState.primaryAction);
+                    }}
+                    onSecondary={(actionState) => {
+                      logStudyEvent("action_secondary_clicked", {
+                        actionState: actionState.kind,
+                        nextAction: activeResponse.nextAction,
+                      });
+                      inputRef.current?.focus();
+                    }}
+                  />
                 </AssistantRow>
               )}
             </>
@@ -948,9 +647,7 @@ export default function TraceGuideDemo() {
                       </div>
                     ))}
                   </div>
-                  {actionStep >= actionSteps.length - 1 && (
-                    <p className={styles.requestId}>Request ID: {action?.requestId || "RF-DEMO"}</p>
-                  )}
+                  {actionStep >= actionSteps.length - 1 && <p className={styles.requestId}>Request ID: {action?.requestId || "RF-DEMO"}</p>}
                 </article>
               </AssistantRow>
             </>
@@ -979,40 +676,30 @@ export default function TraceGuideDemo() {
           <section className={styles.sheet} onClick={(event) => event.stopPropagation()}>
             <div className={styles.handle} />
             {sheetMode === "sourceOverview" && primarySource && (
-              <SourceOverview
-                source={primarySource}
-                onDone={() => setSheetMode(null)}
-                onDetails={() => setSheetMode("sourceDetails")}
-              />
+              <SourceOverview source={primarySource} onViewDetails={() => setSheetMode("sourceDetails")} onDone={() => setSheetMode(null)} />
             )}
             {sheetMode === "sourcesUsed" && (
-              <SourcesUsed sources={activeResponse.sources} onDone={() => setSheetMode(null)} />
+              <SourcesUsed sources={activeResponse.sources} onDone={() => setSheetMode(null)} onOpenSource={openSource} />
             )}
             {sheetMode === "sourceDetails" && primarySource && (
               <SourceDetails source={primarySource} onDone={() => setSheetMode(null)} />
             )}
             {sheetMode === "variables" && (
-              <VariablesSheet
-                variables={variables}
-                updateVariable={updateVariable}
-                onCancel={() => setSheetMode(null)}
-                onSave={saveAndRecheck}
-              />
+              <VariablesSheet variables={variables} updateVariable={updateVariable} onCancel={() => setSheetMode(null)} onSave={saveAndRecheck} />
             )}
             {sheetMode === "evidence" && (
               <EvidenceSheet
-                variables={variables}
-                updateVariable={updateVariable}
                 onCancel={() => setSheetMode(null)}
-                onSave={saveAndRecheck}
+                onAddEvidence={async () => {
+                  const nextVariables = { ...variables, evidence: "Photos provided" };
+                  setVariables(nextVariables);
+                  setSheetMode(null);
+                  await runAssessment(question, nextVariables, "rechecking", activeTask);
+                }}
               />
             )}
             {sheetMode === "ordinaryDetails" && (
-              <OrdinaryDetailsSheet
-                product={activeProduct}
-                variables={variables}
-                onDone={() => setSheetMode(null)}
-              />
+              <OrdinaryDetailsSheet product={activeProduct} variables={variables} onDone={() => setSheetMode(null)} />
             )}
           </section>
         </div>
@@ -1051,49 +738,10 @@ function UserQuestion({ question }: { question: string }) {
   );
 }
 
-function WelcomeCard({
-  onPickQuestion,
-  activeTask,
-}: {
-  onPickQuestion: (question: string, task?: StudyTask) => void;
-  activeTask: StudyTask | null;
-}) {
-  const visibleTasks = activeTask ? [activeTask] : studyTasks;
-  return (
-    <article className={styles.welcomeCard}>
-      <h2>Hi, I’m TraceGuide Support.</h2>
-      <p>
-        I can check orders, product information and store policies before helping you start a
-        support request.
-      </p>
-      <div className={styles.suggestionGrid} aria-label="Suggested questions">
-        {visibleTasks.map((item) => (
-          <button key={item.id} type="button" onClick={() => onPickQuestion(item.text, item)}>
-            <span>{item.label}</span>
-            {item.text}
-          </button>
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function ProductCard({
-  product,
-  onOpenDetails,
-}: {
-  product: ProductContext;
-  onOpenDetails: () => void;
-}) {
+function ProductCard({ product, onOpenDetails }: { product: ProductContext; onOpenDetails: () => void }) {
   return (
     <article className={styles.productCard}>
-      <Image
-        src={productImageSrc(product)}
-        alt={product.name}
-        width={320}
-        height={320}
-        priority
-      />
+      <Image src={productImageSrc(product)} alt={product.name} width={320} height={320} priority />
       <div>
         <h2>{product.name}</h2>
         <p>
@@ -1110,132 +758,80 @@ function ProductCard({
   );
 }
 
-function OrdinaryDetailsSheet({
-  product,
-  variables,
-  onDone,
-}: {
-  product: ProductContext;
-  variables: TraceVariables;
-  onDone: () => void;
-}) {
-  const rows = ordinaryDetailRows(product, variables);
-
-  return (
-    <>
-      <div className={styles.ordinaryDetailHeader}>
-        <div>
-          <h2>{product.linkLabel}</h2>
-          <p>Standard product and order information available before the agent prepares a request.</p>
-        </div>
-      </div>
-
-      <article className={styles.ordinaryDetailCard}>
-        <h3>{product.name}</h3>
-        <p>{product.detail}</p>
-        <div className={styles.ordinaryDetailRows}>
-          {rows.map((row) => (
-            <div key={row.label}>
-              <span>{row.label}</span>
-              <strong>{row.value}</strong>
-            </div>
-          ))}
-        </div>
-      </article>
-
-      <article className={styles.detailNote}>
-        <strong>TraceGuide condition</strong>
-        <p>
-          These ordinary details remain available, while the answer also exposes source anchors,
-          checked variables and confirmation before any simulated service request.
-        </p>
-      </article>
-
-      <button className={styles.fullWidthPrimary} type="button" onClick={onDone}>
-        Done
-      </button>
-    </>
-  );
-}
-
-function AssistantRow({
-  children,
-  compact = false,
-}: {
-  children: React.ReactNode;
-  compact?: boolean;
-}) {
-  return (
-    <div className={`${styles.assistantRow} ${compact ? styles.compactRow : ""}`}>
-      <span className={styles.sparkle} aria-hidden="true">
-        ✦
-      </span>
-      {children}
-    </div>
-  );
-}
-
-function StatusCard({
-  title,
-  subtitle,
-  activeStep,
-  steps,
-}: {
-  title: string;
-  subtitle: string;
-  activeStep: number;
-  steps: string[];
-}) {
+function StatusCard({ title, subtitle, steps, activeStep }: { title: string; subtitle: string; steps: string[]; activeStep: number }) {
   return (
     <article className={styles.statusCard}>
       <h2>{title}</h2>
       <p>{subtitle}</p>
       <div className={styles.statusSteps}>
         {steps.map((step, index) => {
-          const state = index < activeStep ? "done" : index === activeStep ? "active" : "pending";
+          const state = index < activeStep ? styles.done : index === activeStep ? styles.active : styles.pending;
           return (
-            <div key={step} className={styles[state]}>
-              <span>{state === "done" ? "✓" : index + 1}</span>
+            <div className={state} key={step}>
+              <span>{index < activeStep ? "✓" : index + 1}</span>
               <strong>{step}</strong>
-              <em>{state === "done" ? "Done" : state === "active" ? "In progress" : "Pending"}</em>
+              <em>{index < activeStep ? "Done" : index === activeStep ? "In progress" : "Pending"}</em>
             </div>
           );
         })}
       </div>
       <div className={styles.privacyNote}>
         <span>♢</span>
-        We’ll only use your order and policy details to check eligibility.
+        <p>We’ll only use relevant order, product and policy details to support this answer.</p>
       </div>
     </article>
   );
 }
 
-function SourceOverview({
-  source,
-  onDone,
-  onDetails,
+function ActionPrompt({
+  actionState,
+  onPrimary,
+  onSecondary,
 }: {
-  source: Source;
-  onDone: () => void;
-  onDetails: () => void;
+  actionState: ActionState;
+  onPrimary: (actionState: ActionState) => void;
+  onSecondary: (actionState: ActionState) => void;
 }) {
   return (
+    <div>
+      <div className={styles.askBubble}>{actionState.prompt}</div>
+      <div className={styles.quickReplies}>
+        <button type="button" onClick={() => onPrimary(actionState)}>
+          {actionState.primaryAction}
+        </button>
+        <button type="button" onClick={() => onSecondary(actionState)}>
+          {actionState.secondaryAction}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SourceOverview({ source, onViewDetails, onDone }: { source: Source; onViewDetails: () => void; onDone: () => void }) {
+  return (
     <>
-      <div className={styles.simpleSheetHeader}>
-        <h2>Source overview</h2>
-        <p>
-          You tapped: {source.category.toLowerCase()} <b>[{source.number}]</b>
-        </p>
+      <div className={styles.sheetTitleRow}>
+        <span className={styles.sheetIcon}>▤</span>
+        <div className={styles.simpleSheetHeader}>
+          <h2>Source overview</h2>
+          <p>
+            You tapped: {source.category.toLowerCase()} <b>[{source.number}]</b>
+          </p>
+        </div>
+        <button className={styles.donePill} type="button" onClick={onDone}>
+          Done
+        </button>
       </div>
       <article className={styles.overviewSourceCard}>
         <h3>{source.title}</h3>
-        <p>{shortExcerpt(source.excerpt, 150)}</p>
+        <p>{source.excerpt}</p>
+        <span className={styles.relevancePill}>{source.relevance}</span>
       </article>
       <div className={styles.sheetActions}>
-        <button className={styles.secondaryAction} type="button" onClick={onDetails}>
+        <button type="button" onClick={onViewDetails}>
           View details
         </button>
-        <button className={styles.primaryAction} type="button" onClick={onDone}>
+        <button type="button" onClick={onDone}>
           Done
         </button>
       </div>
@@ -1243,20 +839,20 @@ function SourceOverview({
   );
 }
 
-function SourcesUsed({ sources, onDone }: { sources: Source[]; onDone: () => void }) {
+function SourcesUsed({ sources, onDone, onOpenSource }: { sources: Source[]; onDone: () => void; onOpenSource: (source: Source) => void }) {
   return (
     <>
       <div className={styles.simpleSheetHeader}>
         <h2>Sources used</h2>
-        <p>These are the policy and order records used for this answer.</p>
+        <p>These are the product, order or policy records used for this answer.</p>
       </div>
       <div className={styles.sourceList}>
         {sources.slice(0, 3).map((source) => (
-          <article key={source.id}>
-            <small>SOURCE {source.number}</small>
+          <button key={source.id} type="button" onClick={() => onOpenSource(source)}>
+            <span>SOURCE {source.number}</span>
             <h3>{source.title}</h3>
-            <p>{shortExcerpt(source.excerpt, 125)}</p>
-          </article>
+            <p>{source.excerpt}</p>
+          </button>
         ))}
       </div>
       <button className={styles.fullWidthPrimary} type="button" onClick={onDone}>
@@ -1271,56 +867,27 @@ function SourceDetails({ source, onDone }: { source: Source; onDone: () => void 
     <>
       <div className={styles.simpleSheetHeader}>
         <h2>Source details</h2>
-        <p>Source content cannot be edited.</p>
+        <p>
+          Source [{source.number}] · {source.category}
+        </p>
       </div>
       <article className={styles.detailCard}>
-        <small>[{source.number}] {source.category}</small>
         <h3>{source.title}</h3>
         <p>{source.excerpt}</p>
-        {source.matchedAnswer && (
-          <blockquote>Used for: “{source.matchedAnswer}”</blockquote>
-        )}
+      </article>
+      {source.matchedAnswer && (
+        <article className={styles.detailCard}>
+          <h3>Used for this answer</h3>
+          <p>{source.matchedAnswer}</p>
+        </article>
+      )}
+      <article className={styles.detailNote}>
+        <strong>Source content cannot be edited.</strong>
+        <p>You can check it, but only your own situation details can be corrected.</p>
       </article>
       <button className={styles.fullWidthPrimary} type="button" onClick={onDone}>
         Done
       </button>
-    </>
-  );
-}
-
-function EvidenceSheet({
-  variables,
-  updateVariable,
-  onCancel,
-  onSave,
-}: {
-  variables: TraceVariables;
-  updateVariable: (key: keyof TraceVariables, value: string) => void;
-  onCancel: () => void;
-  onSave: () => void;
-}) {
-  return (
-    <>
-      <div className={styles.simpleSheetHeader}>
-        <h2>Add photo evidence</h2>
-        <p>Update the evidence status so the agent can recheck whether a request can be prepared.</p>
-      </div>
-      <div className={styles.variableList}>
-        <SelectField
-          label="Evidence"
-          value={variables.evidence}
-          options={["Photos provided", "Photos helpful", "Photo not added", "Packaging kept", "No quality issue reported", "Not sure"]}
-          onChange={(value) => updateVariable("evidence", value)}
-        />
-      </div>
-      <div className={styles.sheetActions}>
-        <button className={styles.secondaryAction} type="button" onClick={onCancel}>
-          Cancel
-        </button>
-        <button className={styles.primaryAction} type="button" onClick={onSave}>
-          Save and recheck
-        </button>
-      </div>
     </>
   );
 }
@@ -1339,89 +906,125 @@ function VariablesSheet({
   return (
     <>
       <div className={styles.simpleSheetHeader}>
-        <h2>View AI understanding</h2>
-        <p>Check what the agent understood before it prepares a request. You can correct anything that looks wrong.</p>
+        <h2>Check AI understanding</h2>
+        <p>These are the details the agent used for this answer. You can correct your situation details before it checks again.</p>
       </div>
       <div className={styles.variableList}>
-        <SelectField
+        <VariableSelect
           label="Issue identified"
           value={variables.issueIdentified}
-          options={[
-            "Damaged item",
-            "Broken lid",
-            "Damaged package",
-            "Damaged food item",
-            "Change-of-mind chilled food return",
-            "Change-of-mind fresh food return",
-            "Missing accessory",
-            "Late delivery",
-            "Product safety question",
-          ]}
+          options={["Allergen concern", "Damaged item", "Damaged package"]}
           onChange={(value) => updateVariable("issueIdentified", value)}
         />
-        <SelectField
+        <VariableSelect
           label="Request"
           value={variables.request}
-          options={["Return & Refund", "Replacement or refund", "Exchange", "Ask seller", "Human support"]}
+          options={["Product safety advice", "Return & Refund", "Human support"]}
           onChange={(value) => updateVariable("request", value)}
         />
-        <SelectField
+        <VariableSelect
           label="Reason"
           value={variables.reason}
-          options={[
-            "Item arrived damaged",
-            "Lid was broken on arrival",
-            "Package damage reported",
-            "Customer changed their mind",
-            "Wrong item received",
-            "Unsafe to use",
-          ]}
+          options={["Customer is allergic to peanuts", "Item arrived damaged", "Package damage reported"]}
           onChange={(value) => updateVariable("reason", value)}
         />
-        <SelectField
+        <VariableSelect
           label="Evidence"
           value={variables.evidence}
-          options={["Photos provided", "Photos helpful", "Photo not added", "Packaging kept", "No quality issue reported", "Not sure"]}
+          options={["Ingredient data available", "Photos provided", "Photo not added"]}
           onChange={(value) => updateVariable("evidence", value)}
         />
       </div>
       <div className={styles.sheetActions}>
-        <button className={styles.secondaryAction} type="button" onClick={onCancel}>
+        <button type="button" onClick={onCancel}>
           Cancel
         </button>
-        <button className={styles.primaryAction} type="button" onClick={onSave}>
-          Recheck assessment
+        <button type="button" onClick={onSave}>
+          Save and recheck
         </button>
       </div>
     </>
   );
 }
 
-function SelectField({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-}) {
+function VariableSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  const resolvedOptions = options.includes(value) ? options : [value, ...options];
   return (
-    <label className={styles.selectField}>
+    <label className={styles.variableRow}>
       <span>{label}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => (
-          <option key={option}>{option}</option>
+        {resolvedOptions.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
         ))}
       </select>
     </label>
   );
 }
 
-function shortExcerpt(text: string, limit: number) {
-  if (text.length <= limit) return text;
-  const cut = text.slice(0, limit).replace(/\s+\S*$/, "");
-  return `${cut}...`;
+function EvidenceSheet({ onCancel, onAddEvidence }: { onCancel: () => void; onAddEvidence: () => void }) {
+  return (
+    <>
+      <div className={styles.simpleSheetHeader}>
+        <h2>Add photo evidence</h2>
+        <p>This prototype simulates adding a photo so the agent can recheck the request.</p>
+      </div>
+      <article className={styles.detailNote}>
+        <strong>Simulation only</strong>
+        <p>No real photo is uploaded. The prototype updates the evidence status to “Photos provided”.</p>
+      </article>
+      <div className={styles.sheetActions}>
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button type="button" onClick={onAddEvidence}>
+          Add photo evidence
+        </button>
+      </div>
+    </>
+  );
+}
+
+function OrdinaryDetailsSheet({ product, variables, onDone }: { product: ProductContext; variables: TraceVariables; onDone: () => void }) {
+  const rows = [
+    { label: "Product", value: product.name },
+    { label: "Status", value: product.status },
+    { label: "Issue", value: variables.issueIdentified },
+    { label: "Evidence", value: variables.evidence },
+  ];
+
+  return (
+    <>
+      <div className={styles.simpleSheetHeader}>
+        <h2>{product.linkLabel}</h2>
+        <p>Standard product and order information available in a normal shopping app.</p>
+      </div>
+      <article className={styles.ordinaryDetailCard}>
+        <h3>{product.name}</h3>
+        <div className={styles.ordinaryDetailRows}>
+          {rows.map((row) => (
+            <div key={row.label}>
+              <span>{row.label}</span>
+              <strong>{row.value}</strong>
+            </div>
+          ))}
+        </div>
+      </article>
+      <button className={styles.fullWidthPrimary} type="button" onClick={onDone}>
+        Done
+      </button>
+    </>
+  );
+}
+
+function AssistantRow({ children, compact = false }: { children: ReactNode; compact?: boolean }) {
+  return (
+    <div className={`${styles.assistantRow} ${compact ? styles.compactRow : ""}`}>
+      <span className={styles.sparkle} aria-hidden="true">
+        ✦
+      </span>
+      {children}
+    </div>
+  );
 }

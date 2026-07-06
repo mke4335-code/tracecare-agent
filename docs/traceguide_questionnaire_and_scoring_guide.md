@@ -2,108 +2,79 @@
 
 ## Existing Google Forms
 
-Use the three existing forms as the study data collection tools:
+Use these three forms as the study data collection tools:
 
 1. Pre-test form: https://docs.google.com/forms/d/e/1FAIpQLScrneO36mqJVbtJZ9PlMn1DSuPzFt77rinRhVhUHIFh1CzRfQ/viewform
-2. Task Response form: https://docs.google.com/forms/d/e/1FAIpQLSdgSdvrcQfdMyyU6cYt_zrGJrzSxT6iB8Nkx4nd075HlfywIA/viewform
-3. Post-test form: https://docs.google.com/forms/d/e/1FAIpQLSe8tekTmhJ7O6h7WzB2jHDnh90zjuQ-2RZ6d96yvvEMSxeqcw/viewform
+2. Version Block Survey: https://docs.google.com/forms/d/e/1FAIpQLSdgSdvrcQfdMyyU6cYt_zrGJrzSxT6iB8Nkx4nd075HlfywIA/viewform
+3. Final Comparison form: https://docs.google.com/forms/d/e/1FAIpQLSe8tekTmhJ7O6h7WzB2jHDnh90zjuQ-2RZ6d96yvvEMSxeqcw/viewform
 
-Important correction:
+The Version Block Survey is filled once after completing the two tasks in one prototype version. Because each participant uses two versions, each participant submits the Version Block Survey twice.
 
-- The Pre-test participant link is the form ending in `Scrne...`.
-- The Task Response participant link is the form ending in `Sdg...`.
-- The Task Response form must use the updated six task labels below. If it still shows yoghurt / fresh sandwich change-mind / glass food container tasks, update the Task ID question before collecting real data.
+## Final task list
 
-Task Response edit link:
+The Task ID question must contain exactly these four options:
 
-```text
-https://docs.google.com/forms/d/19mo1rG4edbMEYU0YcnZxbRkwLhK14dhnYwQM5TswRM8/edit
-```
+1. `S1-T1 Product information — Milk Cookies peanut allergy`
+2. `S1-T2 Return/refund — Glass Lunch Box arrived damaged`
+3. `S2-T1 Product information — Protein Bar peanut allergy`
+4. `S2-T2 Return/refund — Snack Package damaged, photo not added`
 
-Google Forms stores responses in its Responses tab. To analyse the data, open each form, go to Responses, and link it to a Google Sheet. That response sheet is where the raw data lives.
+Remove old address-change, yoghurt, sandwich and six-task options before collecting real data.
 
-## Why the Task Response form is filled six times
+## Version Block Survey fields
 
-Each participant completes six tasks: three in Baseline and three in TraceGuide. The Task Response form captures the decision made immediately after each task, so it must be filled once per task.
+Each block response should include:
 
-Example for participant P01 in Group 1:
+- Participant code.
+- Sequence group: G1 or G2.
+- Condition: A — Baseline AI customer service / B — TraceGuide Agent.
+- Scenario set: Set 1 / Set 2.
+- Task 1 ID.
+- Task 1 next step, decision ease, decision confidence, reason and ASQ.
+- Task 2 ID.
+- Task 2 next step, decision ease, decision confidence, reason and ASQ.
+- Version-level SUS.
+- Version-level Raw NASA-TLX.
+- Version-level perceived decision support.
+- TraceGuide-only items, skipped if the block is Baseline.
 
-| Round | Prototype | Task | Form action |
-|---|---|---|---|
-| 1 | Baseline | S1-T1 | Fill Task Response once |
-| 2 | Baseline | S1-T2 | Fill Task Response once |
-| 3 | Baseline | S1-T3 | Fill Task Response once |
-| 4 | TraceGuide | S2-T1 | Fill Task Response once |
-| 5 | TraceGuide | S2-T2 | Fill Task Response once |
-| 6 | TraceGuide | S2-T3 | Fill Task Response once |
+## Next-step options
 
-Six rows per participant are required for within-subject paired comparison.
+Use one shared option list so the form stays simple:
 
-## Required Task Response fields
-
-The Task Response form must include these fields:
-
-- Participant code
-- Group
-- Condition: Baseline / TraceGuide
-- Scenario set: Set 1 / Set 2
-- Task ID:
-  - S1-T1 Product information — Milk Cookies peanut allergy
-  - S1-T2 Order modification — Coffee Maker address change before dispatch
-  - S1-T3 Return/refund — Glass Lunch Box arrived damaged
-  - S2-T1 Product information — Protein Bar peanut allergy
-  - S2-T2 Order modification — Fresh Sandwich out for delivery
-  - S2-T3 Return/refund — Snack Pack damaged, photo not added
-- What did you decide to do?
-- Would you authorise the agent to start the suggested action?
-- How easy was it to decide what to do? 1–7
-- How confident are you in your decision? 1–7
-- ASQ 1: Overall, I am satisfied with the ease of completing this task. 1–7
-- ASQ 2: Overall, I am satisfied with the amount of time it took to complete this task. 1–7
-- ASQ 3: Overall, I am satisfied with the support information when completing this task. 1–7
-- Optional note
-
-## Recommended decision options
-
-Use the same answer options for all tasks:
-
-1. Follow the AI advice and authorise the action.
-2. Follow the advice but do not authorise an action yet.
-3. Pause and check more information first.
-4. Add missing evidence or correct details first.
-5. Ask human support.
-6. Do not follow the AI advice.
+1. I would follow the AI advice and not eat the product.
+2. I would still eat the product.
+3. I would authorise the agent to prepare the request.
+4. I would add photo/evidence first.
+5. I would check more information first.
+6. I would ask human support.
+7. I would not continue with the request.
+8. I am not sure.
 
 ## Decision scoring key
 
-Primary outcome: Decision appropriateness, 0–2.
+Primary outcome: decision appropriateness, 0–2.
 
-| Task ID | Best decision option | Score |
-|---|---|---|
-| S1-T1 Product information — Milk Cookies peanut allergy | Do not follow the AI advice / Ask human support if unsure | 2 |
-| S1-T2 Order modification — Coffee Maker address change before dispatch | Follow the AI advice and authorise the address-change request | 2 |
-| S1-T3 Return/refund — Glass Lunch Box arrived damaged | Follow the AI advice and authorise the refund request | 2 |
-| S2-T1 Product information — Protein Bar peanut allergy | Do not follow the AI advice / Ask human support if unsure | 2 |
-| S2-T2 Order modification — Fresh Sandwich out for delivery | Ask human support / Pause and check more information first | 2 |
-| S2-T3 Return/refund — Snack Pack damaged, photo not added | Add missing evidence or correct details first / Ask human support | 2 |
-
-Score 1 is used when the participant recognises uncertainty and pauses, but does not choose the best next action. Score 0 is used when the participant authorises an inappropriate action or follows incorrect advice.
+| Task ID | Score 2 | Score 1 | Score 0 |
+|---|---|---|---|
+| S1-T1 Milk Cookies peanut allergy | Follow the AI advice and not eat; ask human support if still unsure | Check more information first / I am not sure | Still eat the product |
+| S1-T2 Glass Lunch Box damaged | Authorise the agent to prepare the request | Check more information first / ask human support / I am not sure | Do not continue despite eligible damaged item |
+| S2-T1 Protein Bar peanut allergy | Follow the AI advice and not eat; ask human support if still unsure | Check more information first / I am not sure | Still eat the product |
+| S2-T2 Snack Package damaged, no photo | Add photo/evidence first; ask human support | Check more information first / I am not sure | Authorise the agent to prepare the request without evidence |
 
 ## SUS scoring
 
-Use full SUS 10 items after each condition.
-
-For each condition:
+Use the full SUS 10 items after the participant finishes both versions. If the form collects separate A and B SUS answers, score each condition separately.
 
 ```text
 SUS = ((Q1-1) + (5-Q2) + (Q3-1) + (5-Q4) + (Q5-1) + (5-Q6) + (Q7-1) + (5-Q8) + (Q9-1) + (5-Q10)) * 2.5
 ```
 
-Do not call a four-item usability measure SUS. SUS is 10 items.
+Do not call a four-item usability measure SUS. SUS is a 10-item scale.
 
 ## Raw NASA-TLX scoring
 
-Use six dimensions:
+Use the six standard dimensions:
 
 - Mental Demand
 - Physical Demand
@@ -120,7 +91,7 @@ Average of the six dimension ratings
 
 ## ASQ scoring
 
-ASQ is collected after each task with three 7-point items. Task ASQ score:
+ASQ is collected after each task with three 7-point items.
 
 ```text
 ASQ mean = average(ASQ1, ASQ2, ASQ3)
@@ -128,28 +99,26 @@ ASQ mean = average(ASQ1, ASQ2, ASQ3)
 
 Higher score means higher task satisfaction.
 
-## Study-specific items
+## Study-specific TraceGuide items
 
 Label these clearly as:
 
 > Study-specific items — not a validated scale.
 
-Suggested items after each condition:
+Use them to interpret why TraceGuide may help decision-making:
 
-- I could tell what evidence the AI used for its answer.
-- I understood which details affected the AI’s recommendation.
-- I knew what the agent was about to do before I confirmed.
-- I felt able to correct the agent if it misunderstood the situation.
-
-These can support interpretation but should not be presented as a validated new scale.
+- I could identify what information the AI used to support its advice.
+- I could check whether the source information was relevant.
+- I could understand the key conditions behind the AI’s recommendation.
+- I felt able to correct the AI’s understanding before continuing.
 
 ## Main analysis table
 
 After collecting responses, create one row per participant and condition:
 
-| Participant | Condition | Decision mean | Correct task count | ASQ mean | SUS | Raw NASA-TLX | Evidence understanding mean | Perceived control mean |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Participant | Condition | Decision mean | Correct task count | Decision ease mean | Decision confidence mean | ASQ mean | SUS | Raw NASA-TLX | TraceGuide item mean |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 
 Then compare Baseline vs TraceGuide within each participant.
 
-Primary claim should be based on Decision mean / Correct task count, not just satisfaction.
+The primary claim should be based on decision appropriateness, not simply on “trust” or preference.
