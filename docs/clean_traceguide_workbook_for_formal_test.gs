@@ -1,7 +1,14 @@
 const RESPONSE_WORKBOOK_ID = '1L9rBQ7VxiF51e-2wj_opUOKOy1ceoSsG8MXJlyHV0EU';
+const PRE_TEST_FORM_ID = '1ywnr2W_lYGj-lsvWgTWl69-q4W2gba8FG42zihEpQzo';
+const VERSION_BLOCK_FORM_ID = '19mo1rG4edbMEYU0YcnZxbRkwLhK14dhnYwQM5TswRM8';
+const FINAL_COMPARISON_FORM_ID = '1V7n6-G4SQXs566JLGtQQNL7iXK8G3__x_YU57BMKJ_o';
 
 function cleanTraceGuideWorkbookForFormalTest() {
   const ss = SpreadsheetApp.openById(RESPONSE_WORKBOOK_ID);
+
+  // Google does not allow deleting Form-linked response sheets while they are
+  // still connected to a Form. Detach first, clean the workbook, then reconnect.
+  detachFormsFromWorkbook_();
 
   const keepNames = new Set([
     '00 START HERE — Formal Test',
@@ -111,7 +118,29 @@ function cleanTraceGuideWorkbookForFormalTest() {
   });
 
   Logger.log('DONE — Workbook cleaned for formal TraceGuide testing.');
+  reconnectFormsToWorkbook_();
+  Logger.log('DONE — Forms reconnected to this clean workbook.');
   Logger.log(ss.getUrl());
+}
+
+function detachFormsFromWorkbook_() {
+  [PRE_TEST_FORM_ID, VERSION_BLOCK_FORM_ID, FINAL_COMPARISON_FORM_ID].forEach(formId => {
+    const form = FormApp.openById(formId);
+    try {
+      form.removeDestination();
+      Logger.log('Detached form: ' + form.getTitle());
+    } catch (e) {
+      Logger.log('No existing destination to detach, or detach skipped: ' + form.getTitle());
+    }
+  });
+}
+
+function reconnectFormsToWorkbook_() {
+  [PRE_TEST_FORM_ID, VERSION_BLOCK_FORM_ID, FINAL_COMPARISON_FORM_ID].forEach(formId => {
+    const form = FormApp.openById(formId);
+    form.setDestination(FormApp.DestinationType.SPREADSHEET, RESPONSE_WORKBOOK_ID);
+    Logger.log('Reconnected form: ' + form.getTitle());
+  });
 }
 
 function upsertSheet_(ss, name, values) {
