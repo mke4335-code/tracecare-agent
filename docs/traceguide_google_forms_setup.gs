@@ -93,7 +93,7 @@ function setupVersionBlockSurveyForm() {
   resetForm(form);
   form.setTitle('TraceGuide Agent UX Study — Version Block Survey');
   form.setDescription(
-    'Complete this form after finishing the two tasks in one prototype version. You will complete it twice in total: once for Baseline and once for TraceGuide.'
+    'Complete this form after finishing the two tasks in one prototype version. You will complete it twice in total: once for Baseline and once for TraceGuide. Use the prototype naturally and choose what you would do next as an ordinary online shopper.'
   );
 
   addText(form, 'Participant code', 'Use the same code throughout the study.', true);

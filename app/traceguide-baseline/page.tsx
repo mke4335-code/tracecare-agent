@@ -127,6 +127,18 @@ function formatBaselineAnswer(answer: string) {
 function actionStateForResponse(response: BaselineResponse): ActionState {
   if (response.actionState) return response.actionState;
   const lower = response.nextAction.toLowerCase();
+  const context = `${response.variables.issueIdentified} ${response.variables.request} ${response.nextAction}`.toLowerCase();
+
+  if (context.includes("allergen") || context.includes("product safety")) {
+    return {
+      kind: "informational",
+      label: "Advice only",
+      prompt: "This is advice only. You can ask another question or use human support if you are still unsure.",
+      primaryAction: "Ask another question",
+      secondaryAction: "",
+      canStartRequest: false,
+    };
+  }
 
   if (lower.includes("photo") || lower.includes("evidence")) {
     return {
@@ -551,6 +563,10 @@ function ActionPrompt({
   onPrimary: (actionState: ActionState) => void;
   onSecondary: (actionState: ActionState) => void;
 }) {
+  if (actionState.kind === "informational") {
+    return <div className={styles.askBubble}>{actionState.prompt}</div>;
+  }
+
   return (
     <div>
       <div className={styles.askBubble}>{actionState.prompt}</div>

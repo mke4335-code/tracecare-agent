@@ -84,6 +84,11 @@ export default function TraceGuideTaskGuidePage() {
           The study is about decision-making: would you follow the AI advice, stop, check more
           information, ask human support, or allow the agent to prepare the service request?
         </p>
+        <p className={styles.muted}>
+          Use the prototype naturally. You do not need to check every detail. If the interface gives
+          you sources, AI understanding, product details, or human support, use them only when they
+          help you make your next-step decision.
+        </p>
         <div className={styles.note}>
           Fill the Version Block Survey after completing the two tasks in one prototype. Each
           participant fills it twice in total: once for Baseline and once for TraceGuide.

@@ -1036,6 +1036,17 @@ function actionStateFor(scenario: Scenario, assessment: VariableAssessment): Act
   const taskType = assessment.taskType || taskTypeFor(scenario);
   const nextAction = assessment.nextAction.toLowerCase();
 
+  if (/safety|allergen/.test(taskType)) {
+    return {
+      kind: "informational",
+      label: "Advice only",
+      prompt: "This is advice only. You can ask another question or use human support if you are still unsure.",
+      primaryAction: "Ask another question",
+      secondaryAction: "",
+      canStartRequest: false,
+    };
+  }
+
   if (/evidence_required/.test(taskType) || /photo|evidence/.test(nextAction)) {
     return {
       kind: "needs_evidence",
@@ -1054,17 +1065,6 @@ function actionStateFor(scenario: Scenario, assessment: VariableAssessment): Act
       prompt: "Would you like me to connect you to human support?",
       primaryAction: "Yes",
       secondaryAction: "No",
-      canStartRequest: false,
-    };
-  }
-
-  if (/safety|allergen/.test(taskType)) {
-    return {
-      kind: "informational",
-      label: "Advice only",
-      prompt: "I can show the product information used for this answer.",
-      primaryAction: "Talk to human",
-      secondaryAction: "Ask another question",
       canStartRequest: false,
     };
   }
