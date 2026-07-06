@@ -84,8 +84,8 @@ This metric is the main evidence for the research question.
 - Decision ease.
 - Decision confidence.
 - Task satisfaction: ASQ, 3 items per task, collected inside the Version Block Survey.
-- Usability: SUS, 10 items after both versions.
-- Workload: Raw NASA-TLX, 6 dimensions after both versions.
+- Usability: SUS, 10 items after each prototype version block.
+- Workload: Raw NASA-TLX, 6 dimensions after each prototype version block.
 - Perceived decision support.
 - Study-specific TraceGuide items: source understanding and perceived control. These are not validated scales and should be reported as exploratory/item-level results.
 

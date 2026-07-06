@@ -64,7 +64,7 @@ Primary outcome: decision appropriateness, 0–2.
 
 ## SUS scoring
 
-Use the full SUS 10 items after the participant finishes both versions. If the form collects separate A and B SUS answers, score each condition separately.
+Use the full SUS 10 items after each prototype version block. In this study, each participant submits one SUS response set for Baseline and one for TraceGuide, so score each condition separately.
 
 ```text
 SUS = ((Q1-1) + (5-Q2) + (Q3-1) + (5-Q4) + (Q5-1) + (5-Q6) + (Q7-1) + (5-Q8) + (Q9-1) + (5-Q10)) * 2.5
