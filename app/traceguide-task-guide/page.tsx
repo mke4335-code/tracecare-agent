@@ -4,19 +4,11 @@ import { traceguideStudyTasks, type TraceguideStudyTask } from "../../lib/traceg
 const baselineUrl = "https://tracecare-agent.vercel.app/traceguide-baseline";
 const traceGuideUrl = "https://tracecare-agent.vercel.app/traceguide-demo";
 
-const preTestFormUrl =
-  "https://docs.google.com/forms/d/1ywnr2W_lYGj-lsvWgTWl69-q4W2gba8FG42zihEpQzo/viewform";
-const blockSurveyFormUrl =
-  "https://docs.google.com/forms/d/19mo1rG4edbMEYU0YcnZxbRkwLhK14dhnYwQM5TswRM8/viewform";
-const finalComparisonFormUrl =
-  "https://docs.google.com/forms/d/1V7n6-G4SQXs566JLGtQQNL7iXK8G3__x_YU57BMKJ_o/viewform";
+const formalSurveyUrl =
+  "https://forms.office.com/Pages/ResponsePage.aspx?id=Px9DDcEgHEaVikaynU4CGyFIJAS1PnBEtJMitMjfzZxURFRLSFZIMkk0OFFSNEhPVjdCTU5CR0dQOC4u";
 
 const set1Tasks = traceguideStudyTasks.filter((task) => task.set === "1");
 const set2Tasks = traceguideStudyTasks.filter((task) => task.set === "2");
-
-function prototypeLink(baseUrl: string, task: TraceguideStudyTask) {
-  return `${baseUrl}?task=${task.id}`;
-}
 
 function TaskSet({ title, tasks }: { title: string; tasks: TraceguideStudyTask[] }) {
   return (
@@ -51,25 +43,19 @@ export default function TraceGuideTaskGuidePage() {
         <div className={styles.eyebrow}>TraceGuide Agent UX Study</div>
         <h1>Participant Task Guide</h1>
         <p className={styles.subtitle}>
-          You will test two e-commerce AI support prototypes. Each prototype has two tasks. After
-          finishing the two tasks in one prototype, complete the Version Block Survey once.
+          You will test two e-commerce AI support prototypes. Each prototype has two tasks. Follow
+          your assigned Group A or Group B order, then submit the formal survey once at the end.
         </p>
 
         <div className={styles.linkGrid}>
-          <a href={preTestFormUrl} target="_blank" className={styles.primaryLink}>
-            1. Pre-test Form
+          <a href={formalSurveyUrl} target="_blank" className={styles.primaryLink}>
+            Formal Survey — submit once
           </a>
           <a href={baselineUrl} target="_blank" className={styles.secondaryLink}>
             Baseline Prototype
           </a>
           <a href={traceGuideUrl} target="_blank" className={styles.secondaryLink}>
             TraceGuide Prototype
-          </a>
-          <a href={blockSurveyFormUrl} target="_blank" className={styles.primaryLink}>
-            Version Block Survey
-          </a>
-          <a href={finalComparisonFormUrl} target="_blank" className={styles.primaryLink}>
-            Final Comparison
           </a>
         </div>
       </section>
@@ -90,40 +76,41 @@ export default function TraceGuideTaskGuidePage() {
           help you make your next-step decision.
         </p>
         <div className={styles.note}>
-          Fill the Version Block Survey after completing the two tasks in one prototype. Each
-          participant fills it twice in total: once for Baseline and once for TraceGuide.
+          Keep the formal survey open while testing. Complete its First prototype section after the
+          first prototype, its Second prototype section after the second prototype, and submit the
+          form only once. The group you select maps First and Second to the correct prototype.
         </div>
       </section>
 
       <section className={styles.section}>
         <h2>Choose your assigned group</h2>
-        <p className={styles.muted}>The researcher will tell you whether you are in Group 1 or Group 2.</p>
+        <p className={styles.muted}>The researcher will tell you whether you are in Group A or Group B.</p>
         <div className={styles.groupGrid}>
           <article className={styles.groupCard}>
             <div>
-              <span className={styles.pill}>Group 1</span>
+              <span className={styles.pill}>Group A</span>
               <h3>Baseline Set 1 → TraceGuide Set 2</h3>
             </div>
             <ol className={styles.flowList}>
-              <li>Complete the Pre-test form.</li>
+              <li>Open the Formal Survey and select Group A.</li>
               <li>Open Baseline and complete S1-T1 and S1-T2.</li>
-              <li>Fill the Version Block Survey once for Baseline Set 1.</li>
+              <li>Answer the survey section labelled First prototype.</li>
               <li>Open TraceGuide and complete S2-T1 and S2-T2.</li>
-              <li>Fill the Version Block Survey once for TraceGuide Set 2, then Final Comparison.</li>
+              <li>Answer Second prototype and Final comparison, then submit once.</li>
             </ol>
           </article>
 
           <article className={styles.groupCard}>
             <div>
-              <span className={styles.pill}>Group 2</span>
+              <span className={styles.pill}>Group B</span>
               <h3>TraceGuide Set 1 → Baseline Set 2</h3>
             </div>
             <ol className={styles.flowList}>
-              <li>Complete the Pre-test form.</li>
+              <li>Open the Formal Survey and select Group B.</li>
               <li>Open TraceGuide and complete S1-T1 and S1-T2.</li>
-              <li>Fill the Version Block Survey once for TraceGuide Set 1.</li>
+              <li>Answer the survey section labelled First prototype.</li>
               <li>Open Baseline and complete S2-T1 and S2-T2.</li>
-              <li>Fill the Version Block Survey once for Baseline Set 2, then Final Comparison.</li>
+              <li>Answer Second prototype and Final comparison, then submit once.</li>
             </ol>
           </article>
         </div>
@@ -132,26 +119,6 @@ export default function TraceGuideTaskGuidePage() {
       <TaskSet title="Task Set 1" tasks={set1Tasks} />
       <TaskSet title="Task Set 2" tasks={set2Tasks} />
 
-      <section className={styles.section}>
-        <h2>Direct task links</h2>
-        <div className={styles.taskGrid}>
-          {traceguideStudyTasks.map((task) => (
-            <article className={styles.taskCard} key={task.id}>
-              <span className={styles.taskId}>{task.id}</span>
-              <h3>{task.label}</h3>
-              <p>{task.prompt}</p>
-              <div className={styles.linkGrid}>
-                <a href={prototypeLink(baselineUrl, task)} target="_blank" className={styles.secondaryLink}>
-                  Open in Baseline
-                </a>
-                <a href={prototypeLink(traceGuideUrl, task)} target="_blank" className={styles.secondaryLink}>
-                  Open in TraceGuide
-                </a>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
     </main>
   );
 }
