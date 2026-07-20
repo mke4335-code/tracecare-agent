@@ -121,9 +121,9 @@ insert into public.traceguide_products (id, name, image_key, detail, category, r
 values
   ('prod-glass-lunch-box', 'Glass Lunch Box', 'glass-box', '1 item', 'homeware', 'standard', 18, '{}', array['damaged_item', 'standard_return']),
   ('prod-glass-food-container', 'Glass Food Container', 'container-set', '1 item', 'homeware', 'standard', 16, '{}', array['broken_item', 'replacement_or_refund']),
-  ('prod-container-set', 'Glass Food Containers Set', 'container-set', '4-piece set', 'homeware', 'standard', 32, '{}', array['missing_accessory', 'late_delivery']),
+  ('prod-container-set', 'Glass Food Containers Set', 'container-set', '4-piece set', 'homeware', 'standard', 32, '{}', array['damaged_item', 'evidence_required']),
   ('prod-milk-cookies', 'Milk Cookies', 'cookies', '100g / pack', 'packaged_food', 'food_quality_review', 4, array['peanut','sesame','egg','milk'], array['food_quality', 'allergen']),
-  ('prod-coffee-maker', 'Coffee Maker', 'coffee-maker', '1 item', 'homeware', 'standard', 49, '{}', array['address_change', 'pre_dispatch']),
+  ('prod-coffee-maker', 'Coffee Maker', 'coffee-maker', '1 item', 'homeware', 'standard', 49, '{}', array['damaged_item', 'evidence_required']),
   ('prod-protein-bar', 'Protein Bar', 'protein-bar', '60g / bar', 'packaged_food', 'food_quality_review', 3, array['peanut','milk','soy'], array['allergen', 'product_safety']),
   ('prod-chilled-yoghurt', 'Chilled Yoghurt', 'yoghurt', '4 x 125g', 'chilled_food', 'perishable_exception', 5, array['milk'], array['perishable_exception', 'cold_chain']),
   ('prod-fresh-sandwich', 'Fresh Sandwich', 'sandwich', '1 pack', 'fresh_food', 'perishable_exception', 4, array['wheat','egg'], array['perishable_exception', 'fresh_food']),
@@ -144,11 +144,12 @@ values
   ('TC-2091', 'cust-ke-demo', 'prod-chilled-yoghurt', 1, 'delivered', 0, null, true, '{}'),
   ('TC-2104', 'cust-ke-demo', 'prod-milk-cookies', 1, 'delivered', 2, null, null, '{}'),
   ('TC-2152', 'cust-ke-demo', 'prod-coffee-maker', 1, 'processing', 0, null, null, '{}'),
+  ('TC-2170', 'cust-ke-demo', 'prod-coffee-maker', 1, 'delivered', 0, null, null, array['coffee maker','carafe','power cable']),
   ('TC-2166', 'cust-ke-demo', 'prod-protein-bar', 1, 'delivered', 1, null, null, '{}'),
-  ('TC-2118', 'cust-ke-demo', 'prod-glass-food-container', 1, 'delivered', 1, null, null, array['glass base','locking lid']),
+  ('TC-2118', 'cust-ke-demo', 'prod-glass-food-container', 1, 'delivered', 2, null, null, array['glass base','locking lid']),
   ('TC-2122', 'cust-ke-demo', 'prod-fresh-sandwich', 1, 'out_for_delivery', 0, null, true, '{}'),
   ('TC-2136', 'cust-ke-demo', 'prod-snack-pack', 1, 'delivered', 1, null, null, '{}'),
-  ('TC-2140', 'cust-ke-demo', 'prod-container-set', 1, 'delivered', 0, 2, null, array['4 containers','4 matching lids'])
+  ('TC-2140', 'cust-ke-demo', 'prod-container-set', 1, 'delivered', 0, null, null, array['4 containers','4 matching lids'])
 on conflict (id) do update set
   customer_id = excluded.customer_id,
   product_id = excluded.product_id,
@@ -169,7 +170,8 @@ values
   ('ev-container-lid', 'TC-2118', 'photos_provided', 'Customer can provide photos showing the broken lid on arrival.'),
   ('ev-sandwich-change-mind', 'TC-2122', 'not_required', 'No quality, temperature, or incorrect-delivery issue has been reported.'),
   ('ev-snack-unclear', 'TC-2136', 'not_added', 'Package damage has been reported, but photo evidence is not yet attached.'),
-  ('ev-container-set-missing', 'TC-2140', 'unclear', 'Accessory/package contents need confirmation before support action.')
+  ('ev-container-set-missing', 'TC-2140', 'not_added', 'One glass container was reported cracked, but no damage photo is attached.'),
+  ('ev-coffee-damaged-no-photo', 'TC-2170', 'not_added', 'The coffee maker casing was reported cracked, but no damage photo is attached.')
 on conflict (id) do update set
   order_id = excluded.order_id,
   status = excluded.status,
@@ -177,12 +179,10 @@ on conflict (id) do update set
 
 insert into public.traceguide_experiment_tasks (id, scenario_key, customer_id, order_id, issue_type, request_type, reason, default_evidence_status, correct_decision)
 values
-  ('S1-T1', 'allergen_safety', 'cust-ke-demo', 'TC-2104', 'Allergen concern', 'Product safety advice', 'Customer is allergic to peanuts', 'not_required', 'Do not eat the product; use ingredient and allergen evidence, or contact human support if unsure.'),
-  ('S1-T2', 'coffee_maker_address_change', 'cust-ke-demo', 'TC-2152', 'Delivery address change', 'Change delivery address', 'Order has not been dispatched', 'not_required', 'Can prepare an address change request because the order has not been dispatched; user confirmation is required before submission.'),
-  ('S1-T3', 'glass_damaged_refund', 'cust-ke-demo', 'TC-2048', 'Damaged item', 'Return & Refund', 'Item arrived damaged', 'photos_provided', 'Can prepare refund request after confirmation.'),
-  ('S2-T1', 'protein_bar_allergen_safety', 'cust-ke-demo', 'TC-2166', 'Allergen concern', 'Product safety advice', 'Customer is allergic to peanuts', 'not_required', 'Do not eat the product; the product allergen record includes peanut risk, so user should not rely on a generic reassurance.'),
-  ('S2-T2', 'fresh_sandwich_address_change', 'cust-ke-demo', 'TC-2122', 'Delivery address change', 'Change delivery address', 'Order is already out for delivery', 'not_required', 'Do not authorise a normal address change because the order is already out for delivery; send to human support if needed.'),
-  ('S2-T3', 'snack_package_evidence_unclear', 'cust-ke-demo', 'TC-2136', 'Damaged package', 'Return & Refund', 'Package damage reported', 'not_added', 'Ask for photo evidence or human review before refund request.')
+  ('S1-T1', 'glass_damaged_refund', 'cust-ke-demo', 'TC-2048', 'Damaged item', 'Refund', 'Glass lunch box arrived damaged', 'photos_provided', 'Authorise preparation of a damaged-item refund request.'),
+  ('S1-T2', 'container_set_damaged_no_photo', 'cust-ke-demo', 'TC-2140', 'Damaged item', 'Refund', 'One glass container arrived cracked', 'not_added', 'Add a clear damage photo or ask human support before authorising a request.'),
+  ('S2-T1', 'glass_container_broken', 'cust-ke-demo', 'TC-2118', 'Damaged item', 'Refund', 'Locking lid arrived broken', 'photos_provided', 'Authorise preparation of a damaged-item refund request.'),
+  ('S2-T2', 'coffee_maker_damaged_no_photo', 'cust-ke-demo', 'TC-2170', 'Damaged item', 'Refund', 'Coffee maker casing arrived cracked', 'not_added', 'Add a clear damage photo or ask human support before authorising a request.')
 on conflict (id) do update set
   scenario_key = excluded.scenario_key,
   customer_id = excluded.customer_id,

@@ -8,6 +8,10 @@ import {
   orderedTraceguideTasks,
   type TraceguideStudyTask,
 } from "../../lib/traceguide-study-config";
+import {
+  runTraceguideStream,
+  type BuyerProgressEvent,
+} from "../../lib/traceguide-stream-client";
 
 type Source = {
   id: string;
@@ -46,8 +50,6 @@ type ProductContext = {
 type TraceResponse = {
   runId?: string;
   answer: string;
-  confidence: number;
-  confidenceReason?: string;
   sources: Source[];
   sourceTags: string[];
   variables: TraceVariables;
@@ -58,6 +60,13 @@ type TraceResponse = {
   loadingSteps: string[];
   scenario?: string;
   usedLLM?: boolean;
+  caseRuntime?: {
+    caseId: string;
+    status: string;
+    currentStage: string;
+    orderId: string;
+    policyVersionId: string | null;
+  } | null;
 };
 
 type ActionResponse = {
@@ -78,11 +87,10 @@ const defaultProduct: ProductContext = {
 const fallbackResponse: TraceResponse = {
   answer:
     "Yes, this item is likely eligible for a return and refund.\n\nYour order is still within the return window according to the return policy [1]. The order status shows it was delivered recently [2]. Please keep the item and packaging if possible.",
-  confidence: 88,
   sourceTags: ["Return policy", "Order status", "Store policy"],
   variables: {
     issueIdentified: "Damaged item",
-    request: "Return & Refund",
+    request: "Refund",
     reason: "Item arrived damaged",
     evidence: "Photos provided",
   },
@@ -255,7 +263,9 @@ export default function TraceGuideDemo() {
   const [question, setQuestion] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [response, setResponse] = useState<TraceResponse | null>(null);
-  const [phase, setPhase] = useState<"idle" | "loading" | "answer" | "rechecking" | "action">("idle");
+  const [phase, setPhase] = useState<"idle" | "loading" | "answer" | "rechecking" | "preview" | "action" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [progressEvents, setProgressEvents] = useState<BuyerProgressEvent[]>([]);
   const [loadingStep, setLoadingStep] = useState(0);
   const [sheetMode, setSheetMode] = useState<SheetMode>(null);
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
@@ -272,16 +282,19 @@ export default function TraceGuideDemo() {
   const primarySource = selectedSource || activeResponse.sources[0];
   const activeProduct = response?.product || previewProduct;
   const activeLoadingSteps = response?.loadingSteps?.length ? response.loadingSteps : inferLoadingSteps(question);
-  const actionSteps = action?.steps || ["Creating request", "Adding details", "Sending to seller", "Notifying you of updates"];
+  const actionSteps = action?.steps || ["Recording service request"];
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const participant = params.get("pid") || params.get("participant") || "";
     const task = getTraceguideStudyTask(params.get("task") || params.get("taskId"));
-    setParticipantCode(participant);
-    setAssignedTask(task);
-    setActiveTask(task);
-    setClientSessionId(window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    const initialise = window.setTimeout(() => {
+      setParticipantCode(participant);
+      setAssignedTask(task);
+      setActiveTask(task);
+      setClientSessionId(window.crypto.randomUUID());
+    }, 0);
+    return () => window.clearTimeout(initialise);
   }, []);
 
   function logStudyEvent(eventName: string, payload: Record<string, unknown> = {}) {
@@ -310,6 +323,8 @@ export default function TraceGuideDemo() {
     setActionStep(0);
     setSheetMode(null);
     setSelectedSource(null);
+    setErrorMessage("");
+    setProgressEvents([]);
     setActiveTask(assignedTask);
     logStudyEvent("returned_to_task_selection");
   }
@@ -322,6 +337,7 @@ export default function TraceGuideDemo() {
   ) {
     const taskForRun = taskOverride === undefined ? activeTask : taskOverride;
     setPhase(nextPhase);
+    setProgressEvents([]);
     setLoadingStep(0);
     setSheetMode(null);
     setSelectedSource(null);
@@ -343,27 +359,27 @@ export default function TraceGuideDemo() {
       logStudyEvent("variables_saved_recheck_started", { question: prompt, variables: nextVariables });
     }
 
-    const steps = inferLoadingSteps(prompt);
-    const interval = window.setInterval(() => {
-      setLoadingStep((current) => Math.min(current + 1, steps.length - 1));
-    }, 600);
-
+    let succeeded = false;
     try {
-      const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 1500));
-      const apiRequest = fetch("/api/traceguide-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const existingCaseId = nextPhase === "rechecking"
+        ? response?.caseRuntime?.caseId
+        : undefined;
+      const payload = {
           question: prompt,
           taskId: taskForRun?.id,
           variables: nextVariables,
           participantCode,
           condition: "traceguide",
-        }),
+          caseId: existingCaseId,
+      };
+      const result = await runTraceguideStream<Partial<TraceResponse>>({
+        payload,
+        caseId: existingCaseId,
+        onProgress: (event) => setProgressEvents((current) => [
+          ...current.filter((item) => item.id !== event.id),
+          event,
+        ]),
       });
-      const [apiResponse] = await Promise.all([apiRequest, minimumDelay]);
-      const result = await apiResponse.json();
-      if (!apiResponse.ok) throw new Error(result.error || "TraceGuide request failed.");
 
       const normalised = normaliseResponse(result, prompt);
       setResponse(normalised);
@@ -372,38 +388,45 @@ export default function TraceGuideDemo() {
         question: prompt,
         taskId: taskForRun?.id,
         scenario: normalised.scenario,
-        confidence: normalised.confidence,
         usedLLM: normalised.usedLLM,
         answer: normalised.answer,
         sources: normalised.sources,
       });
+      succeeded = true;
     } catch (error) {
       console.error(error);
-      setResponse(fallbackResponse);
-      setVariables(fallbackResponse.variables);
+      setErrorMessage(error instanceof Error ? error.message : "The service checks could not be completed.");
+      setPhase("error");
     } finally {
-      window.clearInterval(interval);
-      setLoadingStep(steps.length);
-      setPhase("answer");
+      setLoadingStep(0);
     }
+    if (succeeded) setPhase("answer");
   }
 
-  function normaliseResponse(result: Partial<TraceResponse>, prompt: string): TraceResponse {
+  function normaliseResponse(result: Partial<TraceResponse>, userPrompt: string): TraceResponse {
+    if (
+      !result.answer ||
+      !result.product ||
+      !result.variables ||
+      !result.actionState ||
+      !result.caseRuntime
+    ) {
+      throw new Error("The service run returned incomplete data. No decision was shown.");
+    }
     return {
-      answer: result.answer || fallbackResponse.answer,
-      confidence: typeof result.confidence === "number" ? result.confidence : 88,
-      confidenceReason: result.confidenceReason,
-      sources: result.sources?.length ? result.sources : fallbackResponse.sources,
-      sourceTags: result.sourceTags?.length ? result.sourceTags : fallbackResponse.sourceTags,
-      variables: result.variables || fallbackResponse.variables,
-      nextAction: result.nextAction || "start a support request",
+      answer: result.answer,
+      sources: result.sources || [],
+      sourceTags: result.sourceTags || [],
+      variables: result.variables,
+      nextAction: result.nextAction || "send this checked case to human support",
       actionState: result.actionState,
-      product: result.product || inferProduct(prompt),
-      loadingTitle: result.loadingTitle || inferLoadingTitle(prompt),
-      loadingSteps: result.loadingSteps?.length ? result.loadingSteps : inferLoadingSteps(prompt),
+      product: result.product,
+      loadingTitle: result.loadingTitle || inferLoadingTitle(userPrompt),
+      loadingSteps: result.loadingSteps?.length ? result.loadingSteps : inferLoadingSteps(userPrompt),
       scenario: result.scenario,
       usedLLM: result.usedLLM,
       runId: result.runId,
+      caseRuntime: result.caseRuntime,
     };
   }
 
@@ -459,6 +482,36 @@ export default function TraceGuideDemo() {
     await runAssessment(question, variables, "rechecking", activeTask);
   }
 
+  async function uploadEvidence(file: File) {
+    const runtime = activeResponse.caseRuntime;
+    if (!runtime?.caseId) {
+      throw new Error("Start a damaged-item support task before adding evidence.");
+    }
+
+    const formData = new FormData();
+    formData.append("caseId", runtime.caseId);
+    formData.append("file", file);
+
+    const apiResponse = await fetch("/api/traceguide-evidence", {
+      method: "POST",
+      body: formData,
+    });
+    const result = await apiResponse.json();
+    if (!apiResponse.ok) {
+      throw new Error(result.error || "The photo evidence could not be added.");
+    }
+
+    const nextVariables = { ...variables, evidence: "Photos provided" };
+    setVariables(nextVariables);
+    setSheetMode(null);
+    logStudyEvent("evidence_uploaded", {
+      caseId: runtime.caseId,
+      mimeType: file.type,
+      size: file.size,
+    });
+    await runAssessment(question, nextVariables, "rechecking", activeTask);
+  }
+
   async function startRequest(nextActionOverride = activeResponse.nextAction, replyLabel = "Yes") {
     setUserApproved(true);
     setActionReply(replyLabel);
@@ -480,6 +533,10 @@ export default function TraceGuideDemo() {
           nextAction: nextActionOverride,
           variables,
           sources: activeResponse.sources.map((source) => source.title),
+          caseId: activeResponse.caseRuntime?.caseId,
+          idempotencyKey: activeResponse.caseRuntime?.caseId
+            ? `${activeResponse.caseRuntime.caseId}:${variables.request}:buyer-approved-v1`
+            : undefined,
         }),
       });
       const result = await apiResponse.json();
@@ -487,21 +544,11 @@ export default function TraceGuideDemo() {
       setAction(result);
     } catch (error) {
       console.error(error);
-      setAction({
-        requestId: "RF-DEMO",
-        steps: ["Preparing support request", "Attaching relevant details", "Sending request to seller", "Notifying you of updates"],
-      });
+      setErrorMessage(error instanceof Error ? error.message : "The service request could not be recorded.");
+      setPhase("error");
+      return;
     }
-
-    const interval = window.setInterval(() => {
-      setActionStep((current) => {
-        if (current >= 3) {
-          window.clearInterval(interval);
-          return current;
-        }
-        return current + 1;
-      });
-    }, 850);
+    setActionStep(1);
   }
 
   return (
@@ -554,20 +601,23 @@ export default function TraceGuideDemo() {
 
           {(phase === "loading" || phase === "rechecking") && (
             <AssistantRow>
-              <StatusCard
-                title={phase === "rechecking" ? "Rechecking assessment..." : inferLoadingTitle(question)}
-                subtitle={
-                  phase === "rechecking"
-                    ? "I’m checking the updated details against the order and policy."
-                    : "This usually takes less than 30 seconds."
-                }
-                activeStep={loadingStep}
-                steps={activeLoadingSteps}
-              />
+              <article className={styles.statusCard}>
+                <h2>{phase === "rechecking" ? "Rechecking your request..." : "Running service checks..."}</h2>
+                <p>Only completed or currently running service operations are shown.</p>
+                <div className={styles.statusSteps}>
+                  {progressEvents.map((event, index) => (
+                    <div className={event.status === "done" ? styles.done : styles.active} key={event.id}>
+                      <span>{event.status === "done" ? "✓" : index + 1}</span>
+                      <strong>{event.label}</strong>
+                      <em>{event.status === "done" ? "Done" : "In progress"}</em>
+                    </div>
+                  ))}
+                </div>
+              </article>
             </AssistantRow>
           )}
 
-          {(phase === "answer" || phase === "action") && (
+          {(phase === "answer" || phase === "preview" || phase === "action") && (
             <>
               <AssistantRow>
                 <article className={styles.answerCard}>
@@ -600,13 +650,13 @@ export default function TraceGuideDemo() {
                         logStudyEvent("view_ai_understanding_clicked", { variables });
                       }}
                     >
-                      View AI understanding
+                      Review request details
                     </button>
                   </div>
                 </article>
               </AssistantRow>
 
-              {!userApproved && (
+              {!userApproved && phase === "answer" && (
                 <AssistantRow compact>
                   <ActionPrompt
                     actionState={actionStateForResponse(activeResponse)}
@@ -626,7 +676,11 @@ export default function TraceGuideDemo() {
                         return;
                       }
 
-                      void startRequest(actionState.canStartRequest ? activeResponse.nextAction : actionState.label.toLowerCase(), actionState.primaryAction);
+                      if (actionState.canStartRequest) {
+                        setPhase("preview");
+                        return;
+                      }
+                      void startRequest(actionState.label.toLowerCase(), actionState.primaryAction);
                     }}
                     onSecondary={(actionState) => {
                       logStudyEvent("action_secondary_clicked", {
@@ -639,6 +693,45 @@ export default function TraceGuideDemo() {
                 </AssistantRow>
               )}
             </>
+          )}
+
+          {phase === "preview" && (
+            <AssistantRow>
+              <article className={styles.actionCard}>
+                <h2>Review the service request</h2>
+                <p><strong>Order:</strong> {activeResponse.caseRuntime?.orderId}</p>
+                <p><strong>Item:</strong> {activeProduct.name}</p>
+                <p><strong>Issue:</strong> {variables.reason}</p>
+                <label className={styles.selectField}>
+                  <span>Requested resolution</span>
+                  <select
+                    value={variables.request}
+                    onChange={(event) => setVariables((current) => ({ ...current, request: event.target.value }))}
+                  >
+                    <option value="Refund">Refund</option>
+                    <option value="Replacement">Replacement</option>
+                    <option value="Human support">Human support</option>
+                  </select>
+                </label>
+                <p><strong>Evidence:</strong> {variables.evidence}</p>
+                <p>This will create a simulated service request for research. It will not issue a real refund or change an order.</p>
+                <div className={styles.quickReplies}>
+                  <button type="button" onClick={() => void startRequest(activeResponse.nextAction, "Confirm")}>Confirm</button>
+                  <button type="button" onClick={() => setPhase("answer")}>Go back</button>
+                </div>
+              </article>
+            </AssistantRow>
+          )}
+
+          {phase === "error" && (
+            <AssistantRow>
+              <article className={styles.actionCard}>
+                <h2>Service checks unavailable</h2>
+                <p>{errorMessage}</p>
+                <p>No service request was created.</p>
+                <button type="button" onClick={resetToTasks}>Choose another task</button>
+              </article>
+            </AssistantRow>
           )}
 
           {userApproved && (
@@ -654,12 +747,12 @@ export default function TraceGuideDemo() {
                         <span>{index < actionStep ? "✓" : index === actionStep ? "●" : ""}</span>
                         <div>
                           <strong>{step}</strong>
-                          <small>{index < actionStep ? "Done" : index === actionStep ? "Processing..." : "Waiting"}</small>
+                          <small>{action ? "Recorded" : "Saving..."}</small>
                         </div>
                       </div>
                     ))}
                   </div>
-                  {actionStep >= actionSteps.length - 1 && <p className={styles.requestId}>Request ID: {action?.requestId || "RF-DEMO"}</p>}
+                  {action && <p className={styles.requestId}>Request ID: {action.requestId}</p>}
                 </article>
               </AssistantRow>
             </>
@@ -702,12 +795,7 @@ export default function TraceGuideDemo() {
             {sheetMode === "evidence" && (
               <EvidenceSheet
                 onCancel={() => setSheetMode(null)}
-                onAddEvidence={async () => {
-                  const nextVariables = { ...variables, evidence: "Photos provided" };
-                  setVariables(nextVariables);
-                  setSheetMode(null);
-                  await runAssessment(question, nextVariables, "rechecking", activeTask);
-                }}
+                onAddEvidence={uploadEvidence}
               />
             )}
             {sheetMode === "ordinaryDetails" && (
@@ -922,34 +1010,30 @@ function VariablesSheet({
   return (
     <>
       <div className={styles.simpleSheetHeader}>
-        <h2>Check AI understanding</h2>
-        <p>These are the details the agent used for this answer. You can correct your situation details before it checks again.</p>
+        <h2>Review request details</h2>
+        <p>Check the goal and description you provided. Order records and policy text cannot be edited here.</p>
       </div>
       <div className={styles.variableList}>
-        <VariableSelect
-          label="Issue identified"
-          value={variables.issueIdentified}
-          options={["Allergen concern", "Damaged item", "Damaged package"]}
-          onChange={(value) => updateVariable("issueIdentified", value)}
-        />
+        <div className={styles.detailNote}>
+          <strong>Issue identified: {variables.issueIdentified}</strong>
+          <p>This is the service procedure selected from your question. Choose another task if it is wrong.</p>
+        </div>
         <VariableSelect
           label="Request"
           value={variables.request}
-          options={["Product safety advice", "Return & Refund", "Human support"]}
+          options={["Refund", "Replacement", "Human support"]}
           onChange={(value) => updateVariable("request", value)}
         />
         <VariableSelect
           label="Reason"
           value={variables.reason}
-          options={["Customer is allergic to peanuts", "Item arrived damaged", "Package damage reported"]}
+          options={["Item arrived damaged", "Item arrived cracked", "Item arrived broken"]}
           onChange={(value) => updateVariable("reason", value)}
         />
-        <VariableSelect
-          label="Evidence"
-          value={variables.evidence}
-          options={["Ingredient data available", "Photos provided", "Photo not added"]}
-          onChange={(value) => updateVariable("evidence", value)}
-        />
+        <div className={styles.detailNote}>
+          <strong>Evidence: {variables.evidence}</strong>
+          <p>Add or replace a photo through the evidence step. This value is not an editable AI variable.</p>
+        </div>
       </div>
       <div className={styles.sheetActions}>
         <button type="button" onClick={onCancel}>
@@ -979,23 +1063,57 @@ function VariableSelect({ label, value, options, onChange }: { label: string; va
   );
 }
 
-function EvidenceSheet({ onCancel, onAddEvidence }: { onCancel: () => void; onAddEvidence: () => void }) {
+function EvidenceSheet({
+  onCancel,
+  onAddEvidence,
+}: {
+  onCancel: () => void;
+  onAddEvidence: (file: File) => Promise<void>;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submitEvidence() {
+    if (!file) {
+      setError("Choose a photo of the damaged item or packaging first.");
+      return;
+    }
+    setUploading(true);
+    setError("");
+    try {
+      await onAddEvidence(file);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "The photo could not be added.");
+      setUploading(false);
+    }
+  }
+
   return (
     <>
       <div className={styles.simpleSheetHeader}>
         <h2>Add photo evidence</h2>
-        <p>This prototype simulates adding a photo so the agent can recheck the request.</p>
+        <p>Add a clear photo of the damaged item or packaging. The agent will recheck the request after it is saved.</p>
       </div>
-      <article className={styles.detailNote}>
-        <strong>Simulation only</strong>
-        <p>No real photo is uploaded. The prototype updates the evidence status to “Photos provided”.</p>
-      </article>
+      <label className={styles.evidencePicker}>
+        <span>{file ? file.name : "Choose a JPEG, PNG or WebP photo"}</span>
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(event) => {
+            setFile(event.target.files?.[0] || null);
+            setError("");
+          }}
+        />
+      </label>
+      <p className={styles.evidencePrivacy}>The image is stored privately with this support case and is not shown in the public knowledge base.</p>
+      {error && <p className={styles.evidenceError} role="alert">{error}</p>}
       <div className={styles.sheetActions}>
-        <button type="button" onClick={onCancel}>
+        <button type="button" onClick={onCancel} disabled={uploading}>
           Cancel
         </button>
-        <button type="button" onClick={onAddEvidence}>
-          Add photo evidence
+        <button type="button" onClick={submitEvidence} disabled={uploading}>
+          {uploading ? "Uploading…" : "Add photo evidence"}
         </button>
       </div>
     </>

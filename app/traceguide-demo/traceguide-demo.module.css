@@ -1004,6 +1004,64 @@
   cursor: pointer;
 }
 
+.sheetActions button:first-child {
+  border: 1.5px solid #2c20ff;
+  background: #ffffff;
+  color: #2c20ff;
+}
+
+.sheetActions button:last-child {
+  border: 0;
+  background: linear-gradient(135deg, #5547ff, #2718ef);
+  color: #ffffff;
+}
+
+.sheetActions button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.evidencePicker {
+  display: flex;
+  min-height: 112px;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  border: 1.5px dashed #a9a4ff;
+  border-radius: 16px;
+  background: #f8f8ff;
+  color: #2c20ff;
+  font-size: 14px;
+  font-weight: 720;
+  text-align: center;
+  cursor: pointer;
+}
+
+.evidencePicker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.evidencePrivacy,
+.evidenceError {
+  margin: 11px 5px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 550;
+}
+
+.evidencePrivacy {
+  color: #6d748a;
+}
+
+.evidenceError {
+  color: #b42318;
+}
+
 .secondaryAction {
   border: 1.5px solid #2c20ff;
   background: #ffffff;
