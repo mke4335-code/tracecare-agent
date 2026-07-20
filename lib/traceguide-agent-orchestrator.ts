@@ -1,7 +1,7 @@
-import type { CommerceContext } from "./traceguide-commerce-data.ts";
-import type { DamagedItemPolicyRules } from "./traceguide-case-runtime.ts";
-import { runDamagedItemProcedure } from "./traceguide-damaged-item-procedure.ts";
-import type { EligibilityDecision } from "./traceguide-eligibility.ts";
+import type { CommerceContext } from "./traceguide-commerce-data";
+import type { DamagedItemPolicyRules } from "./traceguide-case-runtime";
+import { runDamagedItemProcedure } from "./traceguide-damaged-item-procedure";
+import type { EligibilityDecision } from "./traceguide-eligibility";
 
 export type TraceGuideToolName =
   | "understand_request"
