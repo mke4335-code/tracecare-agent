@@ -23,6 +23,15 @@ export async function POST(request: NextRequest) {
       question,
       typeof body.taskId === "string" ? body.taskId : undefined
     );
+    if (!task) {
+      return NextResponse.json(
+        {
+          error:
+            "I could not identify one of the damaged-item study orders. Choose a study task or name the item in your order.",
+        },
+        { status: 422 }
+      );
+    }
     const runtime = await startServiceCase({
       taskId: task.id,
       participantCode: typeof body.participantCode === "string" ? body.participantCode : undefined,

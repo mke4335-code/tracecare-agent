@@ -400,17 +400,26 @@ export default function TraceGuideDemo() {
     if (succeeded) setPhase("answer");
   }
 
-  function normaliseResponse(result: Partial<TraceResponse>, prompt: string): TraceResponse {
+  function normaliseResponse(result: Partial<TraceResponse>, userPrompt: string): TraceResponse {
+    if (
+      !result.answer ||
+      !result.product ||
+      !result.variables ||
+      !result.actionState ||
+      !result.caseRuntime
+    ) {
+      throw new Error("The service run returned incomplete data. No decision was shown.");
+    }
     return {
-      answer: result.answer || fallbackResponse.answer,
+      answer: result.answer,
       sources: result.sources || [],
       sourceTags: result.sourceTags || [],
-      variables: result.variables || variables,
-      nextAction: result.nextAction || "send this case to human support",
+      variables: result.variables,
+      nextAction: result.nextAction || "send this checked case to human support",
       actionState: result.actionState,
-      product: result.product || inferProduct(prompt),
-      loadingTitle: result.loadingTitle || inferLoadingTitle(prompt),
-      loadingSteps: result.loadingSteps?.length ? result.loadingSteps : inferLoadingSteps(prompt),
+      product: result.product,
+      loadingTitle: result.loadingTitle || inferLoadingTitle(userPrompt),
+      loadingSteps: result.loadingSteps?.length ? result.loadingSteps : inferLoadingSteps(userPrompt),
       scenario: result.scenario,
       usedLLM: result.usedLLM,
       runId: result.runId,
@@ -1002,12 +1011,10 @@ function VariablesSheet({
         <p>Check the goal and description you provided. Order records and policy text cannot be edited here.</p>
       </div>
       <div className={styles.variableList}>
-        <VariableSelect
-          label="Issue identified"
-          value={variables.issueIdentified}
-          options={["Damaged item"]}
-          onChange={(value) => updateVariable("issueIdentified", value)}
-        />
+        <div className={styles.detailNote}>
+          <strong>Issue identified: {variables.issueIdentified}</strong>
+          <p>This is the service procedure selected from your question. Choose another task if it is wrong.</p>
+        </div>
         <VariableSelect
           label="Request"
           value={variables.request}

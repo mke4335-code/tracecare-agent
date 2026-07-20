@@ -294,13 +294,23 @@ export default function TraceGuideBaseline() {
         ]),
       });
 
-      const nextProduct = result.product || inferProductFromQuestion(trimmed);
+      if (
+        typeof result.answer !== "string" ||
+        !result.product ||
+        !result.variables ||
+        !result.actionState ||
+        !result.caseRuntime
+      ) {
+        throw new Error("The service run returned incomplete data. No decision was shown.");
+      }
+
+      const nextProduct = result.product as ProductContext;
       setProduct(nextProduct);
       setVariables(result.variables || defaultVariables);
       setResponse({
-        answer: stripEvidenceFeatures(result.answer || "I can help with this order. Would you like me to prepare a support request?"),
-        variables: result.variables || defaultVariables,
-        nextAction: result.nextAction || "start a support request",
+        answer: stripEvidenceFeatures(result.answer),
+        variables: result.variables,
+        nextAction: result.nextAction || "send this checked case to human support",
         actionState: result.actionState,
         product: nextProduct,
         caseRuntime: result.caseRuntime,

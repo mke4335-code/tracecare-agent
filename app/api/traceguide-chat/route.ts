@@ -200,6 +200,15 @@ export async function POST(request: NextRequest) {
     if (!question) return NextResponse.json({ error: "Question is required." }, { status: 400 });
 
     const task = resolveTraceguideStudyTask(question, typeof body.taskId === "string" ? body.taskId : undefined);
+    if (!task) {
+      return NextResponse.json(
+        {
+          error:
+            "I could not identify one of the damaged-item study orders. Choose a study task or name the item in your order.",
+        },
+        { status: 422 }
+      );
+    }
     const session = readTraceGuideCaseSession(request);
     const requestedCaseId = typeof body.caseId === "string" ? body.caseId : null;
     const existingSession = session && (!requestedCaseId || requestedCaseId === session.caseId)

@@ -71,7 +71,8 @@ export function resolveTraceguideStudyTask(question: string, taskId?: string | n
   if (/coffee maker|coffee machine/.test(lower)) return getTraceguideStudyTask("S2-T2")!;
   if (/lid|food container/.test(lower)) return getTraceguideStudyTask("S2-T1")!;
   if (/set|containers/.test(lower)) return getTraceguideStudyTask("S1-T2")!;
-  return getTraceguideStudyTask("S1-T1")!;
+  if (/lunch box|glass box/.test(lower)) return getTraceguideStudyTask("S1-T1")!;
+  return null;
 }
 
 export function orderedTraceguideTasks(activeTaskId?: string | null) {
