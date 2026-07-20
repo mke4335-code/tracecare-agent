@@ -1,5 +1,6 @@
 import {
   createServiceHandoff,
+  getServiceCase,
   prepareAndApproveServiceAction,
 } from "../../../lib/traceguide-case-runtime";
 import { readTraceGuideCaseSession } from "../../../lib/traceguide-case-session";
@@ -56,6 +57,28 @@ export async function POST(request: NextRequest) {
     }
     const serviceRequest = selectedResolution.label;
     const actionType = selectedResolution.actionType;
+    const serviceCase = await getServiceCase({
+      caseId: body.caseId,
+      caseToken: session.caseToken,
+    });
+    if (!serviceCase) {
+      return Response.json({ error: "Service case not found." }, { status: 404 });
+    }
+    if (
+      actionType !== "human_handoff" &&
+      serviceCase.currentStage !== "waiting_for_approval" &&
+      serviceCase.status !== "submitted"
+    ) {
+      return Response.json(
+        {
+          error:
+            serviceCase.currentStage === "collecting_evidence"
+              ? "Add the required evidence before preparing this request."
+              : "This request is not ready for buyer approval.",
+        },
+        { status: 409 }
+      );
+    }
     const steps = actionType === "human_handoff"
       ? ["Human-support handoff recorded"]
       : ["Damaged-item service request recorded"];
