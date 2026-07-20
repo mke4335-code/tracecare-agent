@@ -85,6 +85,8 @@ type ExperimentTaskRecord = {
     | "coffee_maker_address_change"
     | "fresh_sandwich_address_change"
     | "missing_accessory"
+    | "container_set_damaged_no_photo"
+    | "coffee_maker_damaged_no_photo"
     | "unknown";
   customerId: string;
   orderId: string;
@@ -193,7 +195,7 @@ export const traceguideProducts: Product[] = [
     category: "homeware",
     returnClass: "standard",
     priceGbp: 32,
-    policyTags: ["missing_accessory", "late_delivery"],
+    policyTags: ["damaged_item", "evidence_required"],
   },
   {
     id: "prod-milk-cookies",
@@ -214,7 +216,7 @@ export const traceguideProducts: Product[] = [
     category: "homeware",
     returnClass: "standard",
     priceGbp: 49,
-    policyTags: ["address_change", "pre_dispatch"],
+    policyTags: ["damaged_item", "evidence_required"],
   },
   {
     id: "prod-protein-bar",
@@ -296,6 +298,14 @@ export const traceguideOrders: Order[] = [
     deliveredDaysAgo: 0,
   },
   {
+    id: "TC-2170",
+    customerId: "cust-ke-demo",
+    productId: "prod-coffee-maker",
+    quantity: 1,
+    status: "delivered",
+    deliveredDaysAgo: 0,
+  },
+  {
     id: "TC-2166",
     customerId: "cust-ke-demo",
     productId: "prod-protein-bar",
@@ -309,7 +319,7 @@ export const traceguideOrders: Order[] = [
     productId: "prod-glass-food-container",
     quantity: 1,
     status: "delivered",
-    deliveredDaysAgo: 1,
+    deliveredDaysAgo: 2,
     includedItems: ["glass base", "locking lid"],
   },
   {
@@ -335,7 +345,6 @@ export const traceguideOrders: Order[] = [
     quantity: 1,
     status: "delivered",
     deliveredDaysAgo: 0,
-    promisedDeliveryDaysAgo: 2,
     includedItems: ["4 containers", "4 matching lids"],
   },
 ];
@@ -392,55 +401,61 @@ export const traceguideEvidenceRecords: EvidenceRecord[] = [
   {
     id: "ev-container-set-missing",
     orderId: "TC-2140",
-    status: "unclear",
-    description: "Accessory/package contents need confirmation before support action.",
+    status: "not_added",
+    description: "One glass container was reported cracked, but no damage photo is attached.",
+  },
+  {
+    id: "ev-coffee-damaged-no-photo",
+    orderId: "TC-2170",
+    status: "not_added",
+    description: "The coffee maker casing was reported cracked, but no damage photo is attached.",
   },
 ];
 
 export const traceguideExperimentTasks: ExperimentTaskRecord[] = [
   {
     id: "S1-T1",
-    scenarioKey: "allergen_safety",
-    customerId: "cust-ke-demo",
-    orderId: "TC-2104",
-    issueType: "Allergen concern",
-    requestType: "Product safety advice",
-    reason: "Customer is allergic to peanuts",
-    defaultEvidenceStatus: "not_required",
-    correctDecision: "Do not eat the product; use ingredient and allergen evidence, or contact human support if unsure.",
-  },
-  {
-    id: "S1-T2",
     scenarioKey: "glass_damaged_refund",
     customerId: "cust-ke-demo",
     orderId: "TC-2048",
     issueType: "Damaged item",
-    requestType: "Return & Refund",
-    reason: "Item arrived damaged",
+    requestType: "Refund",
+    reason: "Glass lunch box arrived damaged",
     defaultEvidenceStatus: "photos_provided",
-    correctDecision: "Can prepare a refund request because the item is damaged, in the return window, and photo evidence is available.",
+    correctDecision: "Authorise preparation of a damaged-item refund request.",
+  },
+  {
+    id: "S1-T2",
+    scenarioKey: "container_set_damaged_no_photo",
+    customerId: "cust-ke-demo",
+    orderId: "TC-2140",
+    issueType: "Damaged item",
+    requestType: "Refund",
+    reason: "One glass container arrived cracked",
+    defaultEvidenceStatus: "not_added",
+    correctDecision: "Add a clear damage photo or ask human support before authorising a request.",
   },
   {
     id: "S2-T1",
-    scenarioKey: "protein_bar_allergen_safety",
+    scenarioKey: "glass_container_broken",
     customerId: "cust-ke-demo",
-    orderId: "TC-2166",
-    issueType: "Allergen concern",
-    requestType: "Product safety advice",
-    reason: "Customer is allergic to peanuts",
-    defaultEvidenceStatus: "not_required",
-    correctDecision: "Do not eat the product; the product allergen record includes peanut risk, so user should not rely on a generic reassurance.",
+    orderId: "TC-2118",
+    issueType: "Damaged item",
+    requestType: "Refund",
+    reason: "Locking lid arrived broken",
+    defaultEvidenceStatus: "photos_provided",
+    correctDecision: "Authorise preparation of a damaged-item refund request.",
   },
   {
     id: "S2-T2",
-    scenarioKey: "snack_package_evidence_unclear",
+    scenarioKey: "coffee_maker_damaged_no_photo",
     customerId: "cust-ke-demo",
-    orderId: "TC-2136",
-    issueType: "Damaged package",
-    requestType: "Return & Refund",
-    reason: "Package damage reported",
+    orderId: "TC-2170",
+    issueType: "Damaged item",
+    requestType: "Refund",
+    reason: "Coffee maker casing arrived cracked",
     defaultEvidenceStatus: "not_added",
-    correctDecision: "Ask for photo evidence or human review before refund request.",
+    correctDecision: "Add a clear damage photo or ask human support before authorising a request.",
   },
 ];
 

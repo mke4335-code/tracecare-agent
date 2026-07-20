@@ -1,3 +1,10 @@
+import {
+  createServiceHandoff,
+  prepareAndApproveServiceAction,
+} from "../../../lib/traceguide-case-runtime";
+import { readTraceGuideCaseSession } from "../../../lib/traceguide-case-session";
+import { NextRequest } from "next/server";
+
 type RefundActionBody = {
   action?: string;
   product?: string;
@@ -9,9 +16,25 @@ type RefundActionBody = {
     evidence?: string;
   };
   sources?: string[];
+  caseId?: string;
+  idempotencyKey?: string;
 };
 
-export async function POST(request: Request) {
+function normaliseResolution(value?: string) {
+  const lower = value?.trim().toLowerCase();
+  if (lower === "refund" || lower === "return & refund" || lower === "return and refund") {
+    return { label: "Refund", actionType: "return_and_refund" as const };
+  }
+  if (lower === "replacement") {
+    return { label: "Replacement", actionType: "replacement" as const };
+  }
+  if (lower === "human support") {
+    return { label: "Human support", actionType: "human_handoff" as const };
+  }
+  return null;
+}
+
+export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as RefundActionBody;
 
@@ -19,67 +42,80 @@ export async function POST(request: Request) {
       return Response.json({ error: "Unsupported action." }, { status: 400 });
     }
 
-    const serviceRequest = body.variables?.request || "Return & Refund";
-    const requestLower = `${serviceRequest} ${body.nextAction || ""}`.toLowerCase();
-    const prefix = requestLower.includes("address")
-      ? "AC"
-      : requestLower.includes("photo") || requestLower.includes("evidence")
-      ? "EV"
-      : requestLower.includes("compensation")
-      ? "CP"
-      : requestLower.includes("safety") || requestLower.includes("human")
-        ? "HS"
-        : "RF";
-    const requestId = `${prefix}-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-2048`;
-    const steps = requestLower.includes("address")
-      ? [
-          "Creating address change request",
-          "Checking dispatch status",
-          "Saving the new address for review",
-          "Notifying you of updates",
-        ]
-      : requestLower.includes("photo") || requestLower.includes("evidence")
-      ? [
-          "Opening evidence step",
-          "Checking required photo details",
-          "Saving evidence status",
-          "Notifying you of updates",
-        ]
-      : requestLower.includes("compensation")
-      ? [
-          "Creating compensation request",
-          "Checking delivery timeline",
-          "Sending request to seller",
-          "Notifying you of updates",
-        ]
-      : requestLower.includes("safety") || requestLower.includes("human")
-        ? [
-            "Preparing support summary",
-            "Attaching product safety sources",
-            "Sending to human support",
-            "Notifying you of updates",
-          ]
-        : [
-            "Creating refund request",
-            "Adding evidence details",
-            "Submitting request to seller",
-            "Notifying you of updates",
-          ];
+    const session = readTraceGuideCaseSession(request);
+    if (!body.caseId || session?.caseId !== body.caseId) {
+      return Response.json({ error: "The service case session has expired. No request was created." }, { status: 401 });
+    }
+
+    const selectedResolution = normaliseResolution(body.variables?.request);
+    if (!selectedResolution) {
+      return Response.json(
+        { error: "Choose Refund, Replacement or Human support before confirming." },
+        { status: 400 }
+      );
+    }
+    const serviceRequest = selectedResolution.label;
+    const actionType = selectedResolution.actionType;
+    const steps = actionType === "human_handoff"
+      ? ["Human-support handoff recorded"]
+      : ["Damaged-item service request recorded"];
+
+    let persistedResult: Record<string, unknown> | null = null;
+    if (body.caseId) {
+      const summary = {
+        product: body.product || "Glass Lunch Box",
+        issue: body.variables?.issueIdentified || "Damaged item",
+        request: serviceRequest,
+        reason: body.variables?.reason || "Item arrived damaged",
+        evidence: body.variables?.evidence || "Photos needed",
+        sourcesChecked: body.sources || ["Return and refund policy", "Order status"],
+      };
+
+      persistedResult =
+        actionType === "human_handoff"
+          ? await createServiceHandoff({
+              caseId: body.caseId,
+              caseToken: session.caseToken,
+              reasonCode: "BUYER_REQUESTED_HUMAN_REVIEW",
+              summary,
+            })
+          : await prepareAndApproveServiceAction({
+              caseId: body.caseId,
+              caseToken: session.caseToken,
+              actionType,
+              preview: summary,
+              idempotencyKey:
+                body.idempotencyKey || `${body.caseId}:${actionType}:buyer-approved-v1`,
+            });
+    }
+
+    if (!persistedResult || typeof persistedResult.requestId !== "string") {
+      throw new Error("The service request was not persisted.");
+    }
+    const persistedRequestId = persistedResult.requestId;
+
+    const runtimeStatus =
+      persistedResult && typeof persistedResult.status === "string"
+        ? persistedResult.status
+        : "prepared";
 
     return Response.json({
-      requestId,
-      status: "draft_started",
+      requestId: persistedRequestId,
+      caseId: body.caseId || null,
+      persisted: Boolean(persistedResult),
+      runtimeResult: persistedResult,
+      status: runtimeStatus,
       product: body.product || "Glass Lunch Box",
       summary: {
         issue: body.variables?.issueIdentified || "Damaged item",
-        request: body.variables?.request || "Return & Refund",
+        request: serviceRequest,
         reason: body.variables?.reason || "Item arrived damaged",
         evidence: body.variables?.evidence || "Photos needed",
         sourcesChecked: body.sources || ["Return and refund policy", "Order status"],
       },
       steps,
       note:
-        "This demo prepares a simulated service request for review. It does not process real payments, refunds or order changes.",
+        "This research product records a simulated service request and its state transitions. It does not process real payments, refunds or order changes.",
     });
   } catch (error) {
     console.error("TraceGuide action API error:", error);

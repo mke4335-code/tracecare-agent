@@ -8,6 +8,10 @@ import {
   orderedTraceguideTasks,
   type TraceguideStudyTask,
 } from "../../lib/traceguide-study-config";
+import {
+  runTraceguideStream,
+  type BuyerProgressEvent,
+} from "../../lib/traceguide-stream-client";
 
 type ProductContext = {
   name: string;
@@ -39,6 +43,13 @@ type BaselineResponse = {
   nextAction: string;
   actionState?: ActionState;
   product: ProductContext;
+  caseRuntime?: {
+    caseId: string;
+    status: string;
+    currentStage: string;
+    orderId: string;
+    policyVersionId: string | null;
+  } | null;
 };
 
 type ActionResponse = {
@@ -56,7 +67,7 @@ const defaultProduct: ProductContext = {
 
 const defaultVariables: TraceVariables = {
   issueIdentified: "Damaged item",
-  request: "Return & Refund",
+  request: "Refund",
   reason: "Item arrived damaged",
   evidence: "Photos provided",
 };
@@ -177,7 +188,9 @@ export default function TraceGuideBaseline() {
   const [clientSessionId, setClientSessionId] = useState("");
   const [assignedTask, setAssignedTask] = useState<TraceguideStudyTask | null>(null);
   const [activeTask, setActiveTask] = useState<TraceguideStudyTask | null>(null);
-  const [phase, setPhase] = useState<"idle" | "loading" | "answer" | "action">("idle");
+  const [phase, setPhase] = useState<"idle" | "loading" | "answer" | "preview" | "action" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [progressEvents, setProgressEvents] = useState<BuyerProgressEvent[]>([]);
   const [question, setQuestion] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [response, setResponse] = useState<BaselineResponse | null>(null);
@@ -187,19 +200,23 @@ export default function TraceGuideBaseline() {
   const [actionStep, setActionStep] = useState(0);
   const [actionReply, setActionReply] = useState("Yes");
   const [showOrdinaryDetails, setShowOrdinaryDetails] = useState(false);
+  const [showEvidence, setShowEvidence] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const visibleTasks = useMemo(() => orderedTraceguideTasks(assignedTask?.id), [assignedTask]);
-  const actionSteps = action?.steps || ["Creating request", "Adding details", "Sending to seller", "Notifying you of updates"];
+  const actionSteps = action?.steps || ["Recording service request"];
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const participant = params.get("pid") || params.get("participant") || "";
     const task = getTraceguideStudyTask(params.get("task") || params.get("taskId"));
-    setParticipantCode(participant);
-    setAssignedTask(task);
-    setActiveTask(task);
-    setClientSessionId(window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    const initialise = window.setTimeout(() => {
+      setParticipantCode(participant);
+      setAssignedTask(task);
+      setActiveTask(task);
+      setClientSessionId(window.crypto.randomUUID());
+    }, 0);
+    return () => window.clearTimeout(initialise);
   }, []);
 
   function logStudyEvent(eventName: string, payload: Record<string, unknown> = {}) {
@@ -226,11 +243,19 @@ export default function TraceGuideBaseline() {
     setAction(null);
     setActionStep(0);
     setShowOrdinaryDetails(false);
+    setShowEvidence(false);
+    setErrorMessage("");
+    setProgressEvents([]);
     setActiveTask(assignedTask);
     logStudyEvent("returned_to_task_selection");
   }
 
-  async function askAgent(nextQuestion: string, taskOverride?: TraceguideStudyTask | null) {
+  async function askAgent(
+    nextQuestion: string,
+    taskOverride?: TraceguideStudyTask | null,
+    recheckVariables?: TraceVariables,
+    caseRuntime?: BaselineResponse["caseRuntime"]
+  ) {
     const trimmed = nextQuestion.trim();
     if (!trimmed) return;
     const taskForRun = taskOverride === undefined ? activeTask : taskOverride;
@@ -242,6 +267,7 @@ export default function TraceGuideBaseline() {
     setAction(null);
     setActionStep(0);
     setPhase("loading");
+    setProgressEvents([]);
     logStudyEvent("task_started", {
       question: trimmed,
       taskId: taskForRun?.id,
@@ -249,21 +275,24 @@ export default function TraceGuideBaseline() {
       taskCategory: taskForRun?.category,
     });
 
+    let succeeded = false;
     try {
-      const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 900));
-      const apiRequest = fetch("/api/traceguide-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const payload = {
           question: trimmed,
           taskId: taskForRun?.id,
           participantCode,
           condition: "baseline",
-        }),
+          variables: recheckVariables,
+          caseId: caseRuntime?.caseId,
+      };
+      const result = await runTraceguideStream<Record<string, any>>({
+        payload,
+        caseId: caseRuntime?.caseId,
+        onProgress: (event) => setProgressEvents((current) => [
+          ...current.filter((item) => item.id !== event.id),
+          event,
+        ]),
       });
-      const [apiResponse] = await Promise.all([apiRequest, minimumDelay]);
-      const result = await apiResponse.json();
-      if (!apiResponse.ok) throw new Error(result.error || "Baseline request failed.");
 
       const nextProduct = result.product || inferProductFromQuestion(trimmed);
       setProduct(nextProduct);
@@ -274,6 +303,7 @@ export default function TraceGuideBaseline() {
         nextAction: result.nextAction || "start a support request",
         actionState: result.actionState,
         product: nextProduct,
+        caseRuntime: result.caseRuntime,
       });
       logStudyEvent("answer_shown", {
         question: trimmed,
@@ -282,25 +312,36 @@ export default function TraceGuideBaseline() {
         answer: stripEvidenceFeatures(result.answer || ""),
         usedLLM: result.usedLLM,
       });
+      succeeded = true;
     } catch (error) {
       console.error(error);
-      setResponse({
-        answer: "I can help with this, but I need a little more information before preparing a support request.",
-        variables: defaultVariables,
-        nextAction: "contact human support",
-        actionState: {
-          kind: "needs_human_review",
-          label: "Human support",
-          prompt: "Would you like me to connect you to human support?",
-          primaryAction: "Yes",
-          secondaryAction: "No",
-          canStartRequest: false,
-        },
-        product: inferProductFromQuestion(trimmed),
-      });
-    } finally {
-      setPhase("answer");
+      setErrorMessage(error instanceof Error ? error.message : "The service checks could not be completed.");
+      setPhase("error");
     }
+    if (succeeded) setPhase("answer");
+  }
+
+  async function uploadEvidence(file: File) {
+    const runtime = response?.caseRuntime;
+    if (!runtime?.caseId) {
+      throw new Error("Start a damaged-item support task before adding evidence.");
+    }
+    const formData = new FormData();
+    formData.append("caseId", runtime.caseId);
+    formData.append("file", file);
+    const apiResponse = await fetch("/api/traceguide-evidence", { method: "POST", body: formData });
+    const result = await apiResponse.json();
+    if (!apiResponse.ok) throw new Error(result.error || "The photo evidence could not be added.");
+
+    const nextVariables = { ...variables, evidence: "Photos provided" };
+    setVariables(nextVariables);
+    setShowEvidence(false);
+    logStudyEvent("evidence_uploaded", {
+      caseId: runtime.caseId,
+      mimeType: file.type,
+      size: file.size,
+    });
+    await askAgent(question, activeTask, nextVariables, runtime);
   }
 
   function submitQuestion(event: FormEvent<HTMLFormElement>) {
@@ -330,6 +371,10 @@ export default function TraceGuideBaseline() {
           product: product.name,
           nextAction: nextActionOverride,
           variables,
+          caseId: response?.caseRuntime?.caseId,
+          idempotencyKey: response?.caseRuntime?.caseId
+            ? `${response.caseRuntime.caseId}:${variables.request}:buyer-approved-v1`
+            : undefined,
         }),
       });
       const result = await apiResponse.json();
@@ -337,21 +382,11 @@ export default function TraceGuideBaseline() {
       setAction(result);
     } catch (error) {
       console.error(error);
-      setAction({
-        requestId: "BASELINE-DEMO",
-        steps: ["Creating request", "Adding details", "Sending to seller", "Notifying you of updates"],
-      });
+      setErrorMessage(error instanceof Error ? error.message : "The service request could not be recorded.");
+      setPhase("error");
+      return;
     }
-
-    const interval = window.setInterval(() => {
-      setActionStep((current) => {
-        if (current >= 3) {
-          window.clearInterval(interval);
-          return current;
-        }
-        return current + 1;
-      });
-    }, 850);
+    setActionStep(1);
   }
 
   return (
@@ -404,15 +439,23 @@ export default function TraceGuideBaseline() {
 
           {phase === "loading" && (
             <AssistantRow>
-              <div className={styles.baselineLoading}>
-                <span />
-                <span />
-                <span />
-              </div>
+              <article className={styles.statusCard}>
+                <h2>Running service checks...</h2>
+                <p>Only completed or currently running service operations are shown.</p>
+                <div className={styles.statusSteps}>
+                  {progressEvents.map((event, index) => (
+                    <div className={event.status === "done" ? styles.done : styles.active} key={event.id}>
+                      <span>{event.status === "done" ? "✓" : index + 1}</span>
+                      <strong>{event.label}</strong>
+                      <em>{event.status === "done" ? "Done" : "In progress"}</em>
+                    </div>
+                  ))}
+                </div>
+              </article>
             </AssistantRow>
           )}
 
-          {(phase === "answer" || phase === "action") && response && (
+          {(phase === "answer" || phase === "preview" || phase === "action") && response && (
             <>
               <AssistantRow>
                 <article className={styles.baselineAnswerCard}>
@@ -435,7 +478,15 @@ export default function TraceGuideBaseline() {
                         inputRef.current?.focus();
                         return;
                       }
-                      void startRequest(actionState.canStartRequest ? response.nextAction : actionState.label.toLowerCase(), actionState.primaryAction);
+                      if (actionState.kind === "needs_evidence") {
+                        setShowEvidence(true);
+                        return;
+                      }
+                      if (actionState.canStartRequest) {
+                        setPhase("preview");
+                        return;
+                      }
+                      void startRequest(actionState.label.toLowerCase(), actionState.primaryAction);
                     }}
                     onSecondary={(actionState) => {
                       logStudyEvent("action_secondary_clicked", {
@@ -448,6 +499,45 @@ export default function TraceGuideBaseline() {
                 </AssistantRow>
               )}
             </>
+          )}
+
+          {phase === "preview" && response && (
+            <AssistantRow>
+              <article className={styles.actionCard}>
+                <h2>Review the service request</h2>
+                <p><strong>Order:</strong> {response.caseRuntime?.orderId}</p>
+                <p><strong>Item:</strong> {product.name}</p>
+                <p><strong>Issue:</strong> {variables.reason}</p>
+                <label className={styles.selectField}>
+                  <span>Requested resolution</span>
+                  <select
+                    value={variables.request}
+                    onChange={(event) => setVariables((current) => ({ ...current, request: event.target.value }))}
+                  >
+                    <option value="Refund">Refund</option>
+                    <option value="Replacement">Replacement</option>
+                    <option value="Human support">Human support</option>
+                  </select>
+                </label>
+                <p><strong>Evidence:</strong> {variables.evidence}</p>
+                <p>This will create a simulated service request for research. It will not issue a real refund or change an order.</p>
+                <div className={styles.quickReplies}>
+                  <button type="button" onClick={() => void startRequest(response.nextAction, "Confirm")}>Confirm</button>
+                  <button type="button" onClick={() => setPhase("answer")}>Go back</button>
+                </div>
+              </article>
+            </AssistantRow>
+          )}
+
+          {phase === "error" && (
+            <AssistantRow>
+              <article className={styles.actionCard}>
+                <h2>Service checks unavailable</h2>
+                <p>{errorMessage}</p>
+                <p>No service request was created.</p>
+                <button type="button" onClick={resetToTasks}>Choose another task</button>
+              </article>
+            </AssistantRow>
           )}
 
           {phase === "action" && (
@@ -463,12 +553,12 @@ export default function TraceGuideBaseline() {
                         <span>{index < actionStep ? "✓" : index === actionStep ? "●" : ""}</span>
                         <div>
                           <strong>{step}</strong>
-                          <small>{index < actionStep ? "Done" : index === actionStep ? "Processing..." : "Waiting"}</small>
+                          <small>{action ? "Recorded" : "Saving..."}</small>
                         </div>
                       </div>
                     ))}
                   </div>
-                  {actionStep >= actionSteps.length - 1 && <p className={styles.requestId}>Request ID: {action?.requestId || "BASELINE-DEMO"}</p>}
+                  {action && <p className={styles.requestId}>Request ID: {action.requestId}</p>}
                 </article>
               </AssistantRow>
             </>
@@ -497,6 +587,14 @@ export default function TraceGuideBaseline() {
           <section className={styles.sheet} onClick={(event) => event.stopPropagation()}>
             <div className={styles.handle} />
             <OrdinaryDetailsSheet product={product} variables={variables} onDone={() => setShowOrdinaryDetails(false)} />
+          </section>
+        </div>
+      )}
+      {showEvidence && (
+        <div className={styles.sheetBackdrop} onClick={() => setShowEvidence(false)}>
+          <section className={styles.sheet} onClick={(event) => event.stopPropagation()}>
+            <div className={styles.handle} />
+            <BaselineEvidenceSheet onCancel={() => setShowEvidence(false)} onAddEvidence={uploadEvidence} />
           </section>
         </div>
       )}
@@ -615,6 +713,60 @@ function OrdinaryDetailsSheet({ product, variables, onDone }: { product: Product
       <button className={styles.fullWidthPrimary} type="button" onClick={onDone}>
         Done
       </button>
+    </>
+  );
+}
+
+function BaselineEvidenceSheet({
+  onCancel,
+  onAddEvidence,
+}: {
+  onCancel: () => void;
+  onAddEvidence: (file: File) => Promise<void>;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submitEvidence() {
+    if (!file) {
+      setError("Choose a photo of the damaged item or packaging first.");
+      return;
+    }
+    setUploading(true);
+    setError("");
+    try {
+      await onAddEvidence(file);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "The photo could not be added.");
+      setUploading(false);
+    }
+  }
+
+  return (
+    <>
+      <div className={styles.simpleSheetHeader}>
+        <h2>Add photo evidence</h2>
+        <p>Add a clear photo of the damaged item or packaging before continuing.</p>
+      </div>
+      <label className={styles.evidencePicker}>
+        <span>{file ? file.name : "Choose a JPEG, PNG or WebP photo"}</span>
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(event) => {
+            setFile(event.target.files?.[0] || null);
+            setError("");
+          }}
+        />
+      </label>
+      {error && <p className={styles.evidenceError} role="alert">{error}</p>}
+      <div className={styles.sheetActions}>
+        <button type="button" onClick={onCancel} disabled={uploading}>Cancel</button>
+        <button type="button" onClick={submitEvidence} disabled={uploading}>
+          {uploading ? "Uploading…" : "Add photo evidence"}
+        </button>
+      </div>
     </>
   );
 }
