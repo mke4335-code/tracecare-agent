@@ -1,10 +1,10 @@
-import type { CommerceContext } from "./traceguide-commerce-data.ts";
-import type { DamagedItemPolicyRules } from "./traceguide-case-runtime.ts";
+import type { CommerceContext } from "./traceguide-commerce-data";
+import type { DamagedItemPolicyRules } from "./traceguide-case-runtime";
 import {
   evaluateDamagedItemEligibility,
   type EligibilityDecision,
-} from "./traceguide-eligibility.ts";
-import type { ServiceCaseStage } from "./traceguide-service-state.ts";
+} from "./traceguide-eligibility";
+import type { ServiceCaseStage } from "./traceguide-service-state";
 
 export type BuyerFacingProgress = {
   stage: ServiceCaseStage;
