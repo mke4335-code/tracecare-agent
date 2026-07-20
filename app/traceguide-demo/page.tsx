@@ -361,17 +361,20 @@ export default function TraceGuideDemo() {
 
     let succeeded = false;
     try {
+      const existingCaseId = nextPhase === "rechecking"
+        ? response?.caseRuntime?.caseId
+        : undefined;
       const payload = {
           question: prompt,
           taskId: taskForRun?.id,
           variables: nextVariables,
           participantCode,
           condition: "traceguide",
-          caseId: response?.caseRuntime?.caseId,
+          caseId: existingCaseId,
       };
       const result = await runTraceguideStream<Partial<TraceResponse>>({
         payload,
-        caseId: nextPhase === "rechecking" ? response?.caseRuntime?.caseId : null,
+        caseId: existingCaseId,
         onProgress: (event) => setProgressEvents((current) => [
           ...current.filter((item) => item.id !== event.id),
           event,

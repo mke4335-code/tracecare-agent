@@ -477,16 +477,16 @@ export function getCommerceContext(
     traceguideEvidenceRecords[0];
 
   const variables = {
-    issueIdentified: editedVariables?.issueIdentified || task.issueType,
+    issueIdentified: task.issueType,
     request: editedVariables?.request || task.requestType,
     reason: editedVariables?.reason || task.reason,
-    evidence: editedVariables?.evidence || evidenceStatusLabel(defaultEvidence.status),
+    evidence: evidenceStatusLabel(defaultEvidence.status),
   };
 
   const evidence: EvidenceRecord = {
     ...defaultEvidence,
-    status: evidenceStatusFromVariable(variables.evidence, defaultEvidence.status),
-    description: evidenceDescriptionFromVariable(variables.evidence, defaultEvidence.description),
+    status: defaultEvidence.status,
+    description: defaultEvidence.description,
   };
 
   return {
@@ -562,16 +562,16 @@ export function commerceContextFromDatabaseRows(
   };
 
   const variables = {
-    issueIdentified: editedVariables?.issueIdentified || task.issueType,
+    issueIdentified: task.issueType,
     request: editedVariables?.request || task.requestType,
     reason: editedVariables?.reason || task.reason,
-    evidence: editedVariables?.evidence || evidenceStatusLabel(defaultEvidence.status),
+    evidence: evidenceStatusLabel(defaultEvidence.status),
   };
 
   const evidence: EvidenceRecord = {
     ...defaultEvidence,
-    status: evidenceStatusFromVariable(variables.evidence, defaultEvidence.status),
-    description: evidenceDescriptionFromVariable(variables.evidence, defaultEvidence.description),
+    status: defaultEvidence.status,
+    description: defaultEvidence.description,
   };
 
   return {
