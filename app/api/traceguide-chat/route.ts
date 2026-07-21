@@ -129,7 +129,7 @@ function buyerAnswer(
     return `A damage photo is needed before I can prepare the request.\n\nThe damaged-item policy requires a clear photo of the item and packaging before a service request is prepared [${policy}]. The order is recorded as delivered [${order}], but this case does not currently have a damage photo [${evidence}]. You can add one now or ask human support to review the case.`;
   }
   if (eligibility.outcome === "ineligible") {
-    return `I cannot prepare a standard damaged-item request for this order.\n\nThe order does not meet the standard damaged-item policy conditions [${policy}]. You can ask human support to review the circumstances.`;
+    return `I cannot prepare a standard damaged-item request for this order.\n\nThe damaged-item policy has a 30-day standard window [${policy}], while the order record shows this item was delivered 45 days ago [${order}]. You can stop here or ask human support to review the circumstances.`;
   }
   return `This case needs human review before any request is prepared.\n\nThe order or case information does not support an automated damaged-item decision [${order}]. I can send the checked context to human support.`;
 }
@@ -228,8 +228,10 @@ export async function POST(request: NextRequest) {
       const scenarioByTask = {
         "S1-T1": "glass_damaged_refund",
         "S1-T2": "container_set_damaged_no_photo",
+        "S1-T3": "snack_damaged_outside_window",
         "S2-T1": "glass_container_broken",
         "S2-T2": "coffee_maker_damaged_no_photo",
+        "S2-T3": "cookies_damaged_outside_window",
       } as const;
       context = getCommerceContext(scenarioByTask[fixtureTask.id], fixtureTask.id);
     }
