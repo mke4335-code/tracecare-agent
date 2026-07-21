@@ -120,7 +120,7 @@ on conflict (id) do update set
 insert into public.traceguide_products (id, name, image_key, detail, category, return_class, price_gbp, allergens, policy_tags)
 values
   ('prod-glass-lunch-box', 'Glass Lunch Box', 'glass-box', '1 item', 'homeware', 'standard', 18, '{}', array['damaged_item', 'standard_return']),
-  ('prod-glass-food-container', 'Glass Food Container', 'container-set', '1 item', 'homeware', 'standard', 16, '{}', array['broken_item', 'replacement_or_refund']),
+  ('prod-glass-food-container', 'Glass Food Container', 'food-container', '1 item', 'homeware', 'standard', 16, '{}', array['broken_item', 'replacement_or_refund']),
   ('prod-container-set', 'Glass Food Containers Set', 'container-set', '4-piece set', 'homeware', 'standard', 32, '{}', array['damaged_item', 'evidence_required']),
   ('prod-milk-cookies', 'Milk Cookies', 'cookies', '100g / pack', 'packaged_food', 'food_quality_review', 4, array['peanut','sesame','egg','milk'], array['food_quality', 'allergen']),
   ('prod-coffee-maker', 'Coffee Maker', 'coffee-maker', '1 item', 'homeware', 'standard', 49, '{}', array['damaged_item', 'evidence_required']),

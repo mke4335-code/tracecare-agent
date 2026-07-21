@@ -66,4 +66,5 @@ test("all six study task prompts resolve to their own order and product", () => 
   ];
   assert.equal(new Set(set1Images).size, 3);
   assert.equal(new Set(set2Images).size, 3);
+  assert.equal(new Set([...set1Images, ...set2Images]).size, 6);
 });

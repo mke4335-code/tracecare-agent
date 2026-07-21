@@ -2,6 +2,7 @@ export type ProductImage =
   | "glass-box"
   | "cookies"
   | "container-set"
+  | "food-container"
   | "coffee-maker"
   | "protein-bar"
   | "yoghurt"
@@ -182,7 +183,7 @@ export const traceguideProducts: Product[] = [
   {
     id: "prod-glass-food-container",
     name: "Glass Food Container",
-    image: "container-set",
+    image: "food-container",
     detail: "1 item",
     category: "homeware",
     returnClass: "standard",
