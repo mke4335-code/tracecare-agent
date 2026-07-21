@@ -546,14 +546,18 @@ export default function TraceGuideDemo() {
     await runAssessment(question, nextVariables, "rechecking", activeTask);
   }
 
-  async function startRequest(nextActionOverride = activeResponse.nextAction, replyLabel = "Yes") {
+  async function startRequest(
+    nextActionOverride = activeResponse.nextAction,
+    replyLabel = "Yes",
+    requestVariables: TraceVariables = variables
+  ) {
     setUserApproved(true);
     setActionReply(replyLabel);
     setPhase("action");
     setActionStep(0);
     logStudyEvent("yes_clicked", {
       nextAction: nextActionOverride,
-      variables,
+      variables: requestVariables,
       product: activeProduct.name,
     });
 
@@ -565,11 +569,11 @@ export default function TraceGuideDemo() {
           action: "agent_request",
           product: activeProduct.name,
           nextAction: nextActionOverride,
-          variables,
+          variables: requestVariables,
           sources: activeResponse.sources.map((source) => source.title),
           caseId: activeResponse.caseRuntime?.caseId,
           idempotencyKey: activeResponse.caseRuntime?.caseId
-            ? `${activeResponse.caseRuntime.caseId}:${variables.request}:buyer-approved-v1`
+            ? `${activeResponse.caseRuntime.caseId}:${requestVariables.request}:buyer-approved-v1`
             : undefined,
         }),
       });
@@ -693,34 +697,30 @@ export default function TraceGuideDemo() {
               {!userApproved && phase === "answer" && (
                 <AssistantRow compact>
                   <ActionPrompt
-                    actionState={actionStateForResponse(activeResponse)}
-                    onPrimary={(actionState) => {
-                      logStudyEvent("action_primary_clicked", {
+                    onSelect={(selection) => {
+                      const actionState = actionStateForResponse(activeResponse);
+                      logStudyEvent("decision_selected", {
+                        selection,
                         actionState: actionState.kind,
                         nextAction: activeResponse.nextAction,
                       });
-
-                      if (actionState.kind === "needs_evidence") {
-                        setSheetMode("evidence");
+                      if (selection === "prepare_request") {
+                        if (actionState.canStartRequest) setPhase("preview");
+                        else void startRequest(activeResponse.nextAction, "Prepare request");
                         return;
                       }
-
-                      if (actionState.kind === "informational") {
-                        inputRef.current?.focus();
+                      if (selection === "review_details") {
+                        setSheetMode("variables");
                         return;
                       }
-
-                      if (actionState.canStartRequest) {
-                        setPhase("preview");
+                      if (selection === "human_support") {
+                        void startRequest(
+                          "send this case to human support",
+                          "Human support",
+                          { ...variables, request: "Human support" }
+                        );
                         return;
                       }
-                      void startRequest(actionState.label.toLowerCase(), actionState.primaryAction);
-                    }}
-                    onSecondary={(actionState) => {
-                      logStudyEvent("action_secondary_clicked", {
-                        actionState: actionState.kind,
-                        nextAction: activeResponse.nextAction,
-                      });
                       inputRef.current?.focus();
                     }}
                   />
@@ -918,28 +918,18 @@ function StatusCard({ title, subtitle, steps, activeStep }: { title: string; sub
 }
 
 function ActionPrompt({
-  actionState,
-  onPrimary,
-  onSecondary,
+  onSelect,
 }: {
-  actionState: ActionState;
-  onPrimary: (actionState: ActionState) => void;
-  onSecondary: (actionState: ActionState) => void;
+  onSelect: (selection: "prepare_request" | "review_details" | "human_support" | "stop_for_now") => void;
 }) {
-  if (actionState.kind === "informational") {
-    return <div className={styles.askBubble}>{actionState.prompt}</div>;
-  }
-
   return (
     <div>
-      <div className={styles.askBubble}>{actionState.prompt}</div>
-      <div className={styles.quickReplies}>
-        <button type="button" onClick={() => onPrimary(actionState)}>
-          {actionState.primaryAction}
-        </button>
-        <button type="button" onClick={() => onSecondary(actionState)}>
-          {actionState.secondaryAction}
-        </button>
+      <div className={styles.askBubble}>How would you like to continue?</div>
+      <div className={`${styles.quickReplies} ${styles.studyDecisionReplies}`}>
+        <button type="button" onClick={() => onSelect("prepare_request")}>Prepare request</button>
+        <button type="button" onClick={() => onSelect("review_details")}>Review details</button>
+        <button type="button" onClick={() => onSelect("human_support")}>Human support</button>
+        <button type="button" onClick={() => onSelect("stop_for_now")}>Stop for now</button>
       </div>
     </div>
   );

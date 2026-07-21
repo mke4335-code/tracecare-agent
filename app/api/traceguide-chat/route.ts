@@ -115,11 +115,17 @@ function buyerAnswer(
   eligibility: EligibilityDecision,
   sources: BuyerSource[],
   productName: string,
-  requestedResolution: string
+  requestedResolution: string,
+  studyMode = false
 ) {
   const policy = citationFor(sources, "policy");
   const order = citationFor(sources, "order_record");
   const evidence = citationFor(sources, "evidence_record");
+
+  if (studyMode) {
+    const resolution = requestedResolution.toLowerCase() === "replacement" ? "replacement" : "refund";
+    return `This ${productName} appears eligible for a damaged-item service request.\n\nThe order record confirms that the item was delivered [${order}], and the damaged-item policy covers delivery damage [${policy}]. Based on this information, I can prepare a ${resolution} request for you to review.`;
+  }
 
   if (eligibility.outcome === "eligible") {
     const resolution = requestedResolution.toLowerCase() === "replacement" ? "replacement" : "refund";
@@ -304,7 +310,8 @@ export async function POST(request: NextRequest) {
       eligibility,
       sources,
       context.product.name,
-      context.variables.request
+      context.variables.request,
+      body.studyMode !== false
     );
     const actionState = actionStateFor(eligibility);
     const nextAction = eligibility.outcome === "eligible"
