@@ -396,13 +396,17 @@ export default function TraceGuideBaseline() {
     void askAgent(trimmed, null);
   }
 
-  async function startRequest(nextActionOverride = response?.nextAction, replyLabel = "Yes") {
+  async function startRequest(
+    nextActionOverride = response?.nextAction,
+    replyLabel = "Yes",
+    requestVariables: TraceVariables = variables
+  ) {
     setActionReply(replyLabel);
     setPhase("action");
     setActionStep(0);
     logStudyEvent("yes_clicked", {
       nextAction: nextActionOverride,
-      variables,
+      variables: requestVariables,
       product: product.name,
     });
 
@@ -414,10 +418,10 @@ export default function TraceGuideBaseline() {
           action: "agent_request",
           product: product.name,
           nextAction: nextActionOverride,
-          variables,
+          variables: requestVariables,
           caseId: response?.caseRuntime?.caseId,
           idempotencyKey: response?.caseRuntime?.caseId
-            ? `${response.caseRuntime.caseId}:${variables.request}:buyer-approved-v1`
+            ? `${response.caseRuntime.caseId}:${requestVariables.request}:buyer-approved-v1`
             : undefined,
         }),
       });
@@ -512,31 +516,30 @@ export default function TraceGuideBaseline() {
               {phase === "answer" && (
                 <AssistantRow compact>
                   <ActionPrompt
-                    actionState={actionStateForResponse(response)}
-                    onPrimary={(actionState) => {
-                      logStudyEvent("action_primary_clicked", {
+                    onSelect={(selection) => {
+                      const actionState = actionStateForResponse(response);
+                      logStudyEvent("decision_selected", {
+                        selection,
                         actionState: actionState.kind,
                         nextAction: response.nextAction,
                       });
-                      if (actionState.kind === "informational") {
-                        inputRef.current?.focus();
+                      if (selection === "prepare_request") {
+                        if (actionState.canStartRequest) setPhase("preview");
+                        else void startRequest(response.nextAction, "Prepare request");
                         return;
                       }
-                      if (actionState.kind === "needs_evidence") {
-                        setShowEvidence(true);
+                      if (selection === "review_details") {
+                        setShowOrdinaryDetails(true);
                         return;
                       }
-                      if (actionState.canStartRequest) {
-                        setPhase("preview");
+                      if (selection === "human_support") {
+                        void startRequest(
+                          "send this case to human support",
+                          "Human support",
+                          { ...variables, request: "Human support" }
+                        );
                         return;
                       }
-                      void startRequest(actionState.label.toLowerCase(), actionState.primaryAction);
-                    }}
-                    onSecondary={(actionState) => {
-                      logStudyEvent("action_secondary_clicked", {
-                        actionState: actionState.kind,
-                        nextAction: response.nextAction,
-                      });
                       inputRef.current?.focus();
                     }}
                   />
@@ -697,28 +700,18 @@ function ProductCard({ product, onOpenDetails }: { product: ProductContext; onOp
 }
 
 function ActionPrompt({
-  actionState,
-  onPrimary,
-  onSecondary,
+  onSelect,
 }: {
-  actionState: ActionState;
-  onPrimary: (actionState: ActionState) => void;
-  onSecondary: (actionState: ActionState) => void;
+  onSelect: (selection: "prepare_request" | "review_details" | "human_support" | "stop_for_now") => void;
 }) {
-  if (actionState.kind === "informational") {
-    return <div className={styles.askBubble}>{actionState.prompt}</div>;
-  }
-
   return (
     <div>
-      <div className={styles.askBubble}>{actionState.prompt}</div>
-      <div className={styles.quickReplies}>
-        <button type="button" onClick={() => onPrimary(actionState)}>
-          {actionState.primaryAction}
-        </button>
-        <button type="button" onClick={() => onSecondary(actionState)}>
-          {actionState.secondaryAction}
-        </button>
+      <div className={styles.askBubble}>How would you like to continue?</div>
+      <div className={`${styles.quickReplies} ${styles.studyDecisionReplies}`}>
+        <button type="button" onClick={() => onSelect("prepare_request")}>Prepare request</button>
+        <button type="button" onClick={() => onSelect("review_details")}>Review details</button>
+        <button type="button" onClick={() => onSelect("human_support")}>Human support</button>
+        <button type="button" onClick={() => onSelect("stop_for_now")}>Stop for now</button>
       </div>
     </div>
   );
