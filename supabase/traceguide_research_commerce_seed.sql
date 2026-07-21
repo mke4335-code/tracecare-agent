@@ -149,7 +149,9 @@ values
   ('TC-2118', 'cust-ke-demo', 'prod-glass-food-container', 1, 'delivered', 2, null, null, array['glass base','locking lid']),
   ('TC-2122', 'cust-ke-demo', 'prod-fresh-sandwich', 1, 'out_for_delivery', 0, null, true, '{}'),
   ('TC-2136', 'cust-ke-demo', 'prod-snack-pack', 1, 'delivered', 1, null, null, '{}'),
-  ('TC-2140', 'cust-ke-demo', 'prod-container-set', 1, 'delivered', 0, null, null, array['4 containers','4 matching lids'])
+  ('TC-2140', 'cust-ke-demo', 'prod-container-set', 1, 'delivered', 0, null, null, array['4 containers','4 matching lids']),
+  ('TC-2181', 'cust-ke-demo', 'prod-snack-pack', 1, 'delivered', 45, null, null, '{}'),
+  ('TC-2182', 'cust-ke-demo', 'prod-milk-cookies', 1, 'delivered', 45, null, null, '{}')
 on conflict (id) do update set
   customer_id = excluded.customer_id,
   product_id = excluded.product_id,
@@ -171,7 +173,9 @@ values
   ('ev-sandwich-change-mind', 'TC-2122', 'not_required', 'No quality, temperature, or incorrect-delivery issue has been reported.'),
   ('ev-snack-unclear', 'TC-2136', 'not_added', 'Package damage has been reported, but photo evidence is not yet attached.'),
   ('ev-container-set-missing', 'TC-2140', 'not_added', 'One glass container was reported cracked, but no damage photo is attached.'),
-  ('ev-coffee-damaged-no-photo', 'TC-2170', 'not_added', 'The coffee maker casing was reported cracked, but no damage photo is attached.')
+  ('ev-coffee-damaged-no-photo', 'TC-2170', 'not_added', 'The coffee maker casing was reported cracked, but no damage photo is attached.'),
+  ('ev-snack-outside-window', 'TC-2181', 'photos_provided', 'A clear photo shows the crushed snack package, but the order was delivered 45 days ago.'),
+  ('ev-cookies-outside-window', 'TC-2182', 'photos_provided', 'A clear photo shows the crushed cookie package, but the order was delivered 45 days ago.')
 on conflict (id) do update set
   order_id = excluded.order_id,
   status = excluded.status,
@@ -181,8 +185,10 @@ insert into public.traceguide_experiment_tasks (id, scenario_key, customer_id, o
 values
   ('S1-T1', 'glass_damaged_refund', 'cust-ke-demo', 'TC-2048', 'Damaged item', 'Refund', 'Glass lunch box arrived damaged', 'photos_provided', 'Authorise preparation of a damaged-item refund request.'),
   ('S1-T2', 'container_set_damaged_no_photo', 'cust-ke-demo', 'TC-2140', 'Damaged item', 'Refund', 'One glass container arrived cracked', 'not_added', 'Add a clear damage photo or ask human support before authorising a request.'),
+  ('S1-T3', 'snack_damaged_outside_window', 'cust-ke-demo', 'TC-2181', 'Damaged item', 'Refund or replacement', 'Snack package arrived crushed and was reported after 45 days', 'photos_provided', 'Do not authorise a standard request; stop or ask human support because the order is outside the 30-day window.'),
   ('S2-T1', 'glass_container_broken', 'cust-ke-demo', 'TC-2118', 'Damaged item', 'Refund', 'Locking lid arrived broken', 'photos_provided', 'Authorise preparation of a damaged-item refund request.'),
-  ('S2-T2', 'coffee_maker_damaged_no_photo', 'cust-ke-demo', 'TC-2170', 'Damaged item', 'Refund', 'Coffee maker casing arrived cracked', 'not_added', 'Add a clear damage photo or ask human support before authorising a request.')
+  ('S2-T2', 'coffee_maker_damaged_no_photo', 'cust-ke-demo', 'TC-2170', 'Damaged item', 'Refund', 'Coffee maker casing arrived cracked', 'not_added', 'Add a clear damage photo or ask human support before authorising a request.'),
+  ('S2-T3', 'cookies_damaged_outside_window', 'cust-ke-demo', 'TC-2182', 'Damaged item', 'Refund or replacement', 'Milk-cookie package arrived crushed and was reported after 45 days', 'photos_provided', 'Do not authorise a standard request; stop or ask human support because the order is outside the 30-day window.')
 on conflict (id) do update set
   scenario_key = excluded.scenario_key,
   customer_id = excluded.customer_id,

@@ -126,6 +126,36 @@ function includesAny(text: string, terms: string[]) {
 }
 
 function inferProduct(prompt: string): ProductContext {
+  if (includesAny(prompt, ["coffee maker", "coffee machine", "咖啡机"])) {
+    return {
+      name: "Coffee Maker",
+      image: "coffee-maker",
+      detail: "1 item",
+      status: "Order record available",
+      linkLabel: "Order details",
+    };
+  }
+
+  if (includesAny(prompt, ["container set", "containers set", "one container", "容器套装"])) {
+    return {
+      name: "Glass Food Containers Set",
+      image: "container-set",
+      detail: "4-piece set",
+      status: "Order record available",
+      linkLabel: "Order details",
+    };
+  }
+
+  if (includesAny(prompt, ["food container", "broken lid", "locking lid", "保鲜盒盖"])) {
+    return {
+      name: "Glass Food Container",
+      image: "container-set",
+      detail: "1 item",
+      status: "Order record available",
+      linkLabel: "Order details",
+    };
+  }
+
   if (includesAny(prompt, ["protein bar", "蛋白棒"])) {
     return {
       name: "Protein Bar",
@@ -204,6 +234,9 @@ function productImageSrc(product: ProductContext) {
   if (product.image === "snack") return "/traceguide-snack.jpg";
   if (product.image === "cookies") return "/traceguide-cookie.png";
   if (product.image === "container-set") return "/traceguide-container-set.png";
+  if (product.image === "coffee-maker") return "/traceguide-coffee-maker.jpg";
+  if (product.image === "yoghurt") return "/traceguide-yoghurt.jpg";
+  if (product.image === "sandwich") return "/traceguide-sandwich.jpg";
   return "/traceguide-glass-lunch-box.png";
 }
 

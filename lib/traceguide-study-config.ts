@@ -1,7 +1,7 @@
 export type TraceguideTaskCategory = "Damaged-item resolution";
 
 export type TraceguideStudyTask = {
-  id: "S1-T1" | "S1-T2" | "S2-T1" | "S2-T2";
+  id: "S1-T1" | "S1-T2" | "S1-T3" | "S2-T1" | "S2-T2" | "S2-T3";
   set: "1" | "2";
   category: TraceguideTaskCategory;
   label: string;
@@ -36,6 +36,17 @@ export const traceguideStudyTasks: TraceguideStudyTask[] = [
     groundTruth: "Do not authorise yet; add a clear damage photo or ask human support.",
   },
   {
+    id: "S1-T3",
+    set: "1",
+    category: "Damaged-item resolution",
+    label: "Crushed snack pack — outside standard window",
+    title: "Snack Pack reported damaged after 45 days",
+    context: "The sealed snack pack arrived crushed. It was delivered 45 days ago, and a clear photo is already attached.",
+    prompt: "My snack pack arrived crushed, but it was delivered 45 days ago. A photo is attached. What can I do?",
+    decisionPrompt: "Would you authorise a standard damaged-item request, stop, or ask human support?",
+    groundTruth: "Do not authorise a standard request because the order is outside the 30-day window; stop or ask human support.",
+  },
+  {
     id: "S2-T1",
     set: "2",
     category: "Damaged-item resolution",
@@ -57,6 +68,17 @@ export const traceguideStudyTasks: TraceguideStudyTask[] = [
     decisionPrompt: "Would you authorise a service request now, or add evidence first?",
     groundTruth: "Do not authorise yet; add a clear damage photo or ask human support.",
   },
+  {
+    id: "S2-T3",
+    set: "2",
+    category: "Damaged-item resolution",
+    label: "Crushed cookie pack — outside standard window",
+    title: "Milk Cookies reported damaged after 45 days",
+    context: "The sealed milk-cookie pack arrived crushed. It was delivered 45 days ago, and a clear photo is already attached.",
+    prompt: "My milk-cookie pack arrived crushed, but it was delivered 45 days ago. A photo is attached. What can I do?",
+    decisionPrompt: "Would you authorise a standard damaged-item request, stop, or ask human support?",
+    groundTruth: "Do not authorise a standard request because the order is outside the 30-day window; stop or ask human support.",
+  },
 ];
 
 export function getTraceguideStudyTask(taskId?: string | null) {
@@ -68,6 +90,8 @@ export function resolveTraceguideStudyTask(question: string, taskId?: string | n
   const requested = getTraceguideStudyTask(taskId);
   if (requested) return requested;
   const lower = question.toLowerCase();
+  if (/snack|snack pack/.test(lower) && /45 days|outside/.test(lower)) return getTraceguideStudyTask("S1-T3")!;
+  if (/cookie|milk-cookie|milk cookie/.test(lower) && /45 days|outside/.test(lower)) return getTraceguideStudyTask("S2-T3")!;
   if (/coffee maker|coffee machine/.test(lower)) return getTraceguideStudyTask("S2-T2")!;
   if (/lid|food container/.test(lower)) return getTraceguideStudyTask("S2-T1")!;
   if (/set|containers/.test(lower)) return getTraceguideStudyTask("S1-T2")!;

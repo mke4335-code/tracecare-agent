@@ -43,7 +43,7 @@ export default function TraceGuideTaskGuidePage() {
         <div className={styles.eyebrow}>TraceGuide Agent UX Study</div>
         <h1>Participant Task Guide</h1>
         <p className={styles.subtitle}>
-          You will test two e-commerce AI support prototypes. Each prototype has two tasks. Follow
+          You will test two e-commerce AI support prototypes. Each prototype has three tasks. Follow
           your assigned Group A or Group B order, then submit the formal survey once at the end.
         </p>
 
@@ -93,9 +93,9 @@ export default function TraceGuideTaskGuidePage() {
             </div>
             <ol className={styles.flowList}>
               <li>Open the Formal Survey and select Group A.</li>
-              <li>Open Baseline and complete S1-T1 and S1-T2.</li>
+              <li>Open Baseline and complete S1-T1, S1-T2 and S1-T3.</li>
               <li>Answer the survey section labelled First prototype.</li>
-              <li>Open TraceGuide and complete S2-T1 and S2-T2.</li>
+              <li>Open TraceGuide and complete S2-T1, S2-T2 and S2-T3.</li>
               <li>Answer Second prototype and Final comparison, then submit once.</li>
             </ol>
           </article>
@@ -107,9 +107,9 @@ export default function TraceGuideTaskGuidePage() {
             </div>
             <ol className={styles.flowList}>
               <li>Open the Formal Survey and select Group B.</li>
-              <li>Open TraceGuide and complete S1-T1 and S1-T2.</li>
+              <li>Open TraceGuide and complete S1-T1, S1-T2 and S1-T3.</li>
               <li>Answer the survey section labelled First prototype.</li>
-              <li>Open Baseline and complete S2-T1 and S2-T2.</li>
+              <li>Open Baseline and complete S2-T1, S2-T2 and S2-T3.</li>
               <li>Answer Second prototype and Final comparison, then submit once.</li>
             </ol>
           </article>

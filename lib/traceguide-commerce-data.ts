@@ -87,6 +87,8 @@ type ExperimentTaskRecord = {
     | "missing_accessory"
     | "container_set_damaged_no_photo"
     | "coffee_maker_damaged_no_photo"
+    | "snack_damaged_outside_window"
+    | "cookies_damaged_outside_window"
     | "unknown";
   customerId: string;
   orderId: string;
@@ -347,6 +349,22 @@ export const traceguideOrders: Order[] = [
     deliveredDaysAgo: 0,
     includedItems: ["4 containers", "4 matching lids"],
   },
+  {
+    id: "TC-2181",
+    customerId: "cust-ke-demo",
+    productId: "prod-snack-pack",
+    quantity: 1,
+    status: "delivered",
+    deliveredDaysAgo: 45,
+  },
+  {
+    id: "TC-2182",
+    customerId: "cust-ke-demo",
+    productId: "prod-milk-cookies",
+    quantity: 1,
+    status: "delivered",
+    deliveredDaysAgo: 45,
+  },
 ];
 
 export const traceguideEvidenceRecords: EvidenceRecord[] = [
@@ -410,6 +428,18 @@ export const traceguideEvidenceRecords: EvidenceRecord[] = [
     status: "not_added",
     description: "The coffee maker casing was reported cracked, but no damage photo is attached.",
   },
+  {
+    id: "ev-snack-outside-window",
+    orderId: "TC-2181",
+    status: "photos_provided",
+    description: "A clear photo shows the crushed snack package, but the order was delivered 45 days ago.",
+  },
+  {
+    id: "ev-cookies-outside-window",
+    orderId: "TC-2182",
+    status: "photos_provided",
+    description: "A clear photo shows the crushed cookie package, but the order was delivered 45 days ago.",
+  },
 ];
 
 export const traceguideExperimentTasks: ExperimentTaskRecord[] = [
@@ -436,6 +466,17 @@ export const traceguideExperimentTasks: ExperimentTaskRecord[] = [
     correctDecision: "Add a clear damage photo or ask human support before authorising a request.",
   },
   {
+    id: "S1-T3",
+    scenarioKey: "snack_damaged_outside_window",
+    customerId: "cust-ke-demo",
+    orderId: "TC-2181",
+    issueType: "Damaged item",
+    requestType: "Refund or replacement",
+    reason: "Snack package arrived crushed and was reported after 45 days",
+    defaultEvidenceStatus: "photos_provided",
+    correctDecision: "Do not authorise a standard request; stop or ask human support because the order is outside the 30-day window.",
+  },
+  {
     id: "S2-T1",
     scenarioKey: "glass_container_broken",
     customerId: "cust-ke-demo",
@@ -456,6 +497,17 @@ export const traceguideExperimentTasks: ExperimentTaskRecord[] = [
     reason: "Coffee maker casing arrived cracked",
     defaultEvidenceStatus: "not_added",
     correctDecision: "Add a clear damage photo or ask human support before authorising a request.",
+  },
+  {
+    id: "S2-T3",
+    scenarioKey: "cookies_damaged_outside_window",
+    customerId: "cust-ke-demo",
+    orderId: "TC-2182",
+    issueType: "Damaged item",
+    requestType: "Refund or replacement",
+    reason: "Milk-cookie package arrived crushed and was reported after 45 days",
+    defaultEvidenceStatus: "photos_provided",
+    correctDecision: "Do not authorise a standard request; stop or ask human support because the order is outside the 30-day window.",
   },
 ];
 
