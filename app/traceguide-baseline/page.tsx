@@ -15,7 +15,7 @@ import {
 
 type ProductContext = {
   name: string;
-  image: "glass-box" | "cookies" | "container-set" | "coffee-maker" | "protein-bar" | "yoghurt" | "sandwich" | "snack";
+  image: "glass-box" | "cookies" | "container-set" | "food-container" | "coffee-maker" | "protein-bar" | "yoghurt" | "sandwich" | "snack";
   detail: string;
   status: string;
   linkLabel: string;
@@ -82,6 +82,7 @@ function productImageSrc(product: ProductContext) {
   if (product.image === "snack") return "/traceguide-snack.jpg";
   if (product.image === "cookies") return "/traceguide-cookie.png";
   if (product.image === "container-set") return "/traceguide-container-set.png";
+  if (product.image === "food-container") return "/traceguide-food-container-broken-lid.jpg";
   if (product.image === "coffee-maker") return "/traceguide-coffee-maker.jpg";
   if (product.image === "yoghurt") return "/traceguide-yoghurt.jpg";
   if (product.image === "sandwich") return "/traceguide-sandwich.jpg";
@@ -112,7 +113,7 @@ function inferProductFromQuestion(question: string): ProductContext {
   if (includesAny(question, ["food container", "broken lid", "locking lid", "保鲜盒盖"])) {
     return {
       name: "Glass Food Container",
-      image: "container-set",
+      image: "food-container",
       detail: "1 item",
       status: "Order record available",
       linkLabel: "Order details",
